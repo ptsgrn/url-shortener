@@ -1,5 +1,5 @@
 import { sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { createdAt, id } from "../../db/columns.ts";
+import { id, timestamps } from "../../db/columns.ts";
 import { users } from "../users/schema.ts";
 
 export const links = sqliteTable("links", {
@@ -7,5 +7,7 @@ export const links = sqliteTable("links", {
   code: text("code").notNull().unique(),
   url: text("url").notNull(),
   userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
-  createdAt: createdAt(),
+  deactivatedAt: text("deactivated_at").$type<string | null>(),
+  deactivatedReason: text("deactivated_reason").$type<string | null>(),
+  ...timestamps(),
 });

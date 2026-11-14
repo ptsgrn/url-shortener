@@ -11,6 +11,17 @@ export const updatedAt = () =>
     .notNull()
     .$defaultFn(() => new Date());
 
+export const deletedAt = () =>
+  integer("deleted_at", { mode: "timestamp" })
+    .$type<number | null>()
+    .$default(() => null);
+
+export const timestamps = () => ({
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  deletedAt: deletedAt(),
+});
+
 export const id = () =>
   text("id")
     .primaryKey()
