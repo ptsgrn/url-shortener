@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/app.ts",
     "./db": "./src/db/index.ts",
-    "./auth": "./src/modules/auth/service.ts"
+    "./auth": "./src/modules/auth/service.ts",
+    "./errors": "./src/errors.ts"
   },
   "scripts": {
     "dev:standalone": "bun --watch src/index.ts",
@@ -20,14 +21,17 @@
     "arctic": "^3.7.0",
     "drizzle-orm": "^0.45.4",
     "elysia": "^1.4.32",
-    "jose": "^6.2.17"
+    "jose": "^6.2.17",
+    "neverthrow": "^8.2.0"
   },
   "devDependencies": {
+    "@eslint/compat": "^2.1.1",
     "@repo/eslint-config": "*",
     "@repo/typescript-config": "*",
     "@types/bun": "^1.4.4",
     "drizzle-kit": "^0.31.11",
     "eslint": "10.9.1",
+    "eslint-plugin-neverthrow": "^1.1.4",
     "typescript": "^6.0.3",
     "wrangler": "4.162.0"
   }
