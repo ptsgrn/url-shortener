@@ -14,7 +14,7 @@ const fail = failWith({ ...LinkErrorStatus, ...InternalErrorStatus });
 
 /**
  * Short links, at `/links`. Looking one up is public; creating, listing and
- * deleting require a signed-in user.
+ * deleting require a signed-in user whose account isn't suspended (FR-01).
  */
 export const links = (deps: Deps) =>
   new Elysia({
@@ -28,13 +28,13 @@ export const links = (deps: Deps) =>
       ({ body, user, status }) =>
         Link.create(deps.db, body, user.id).match((link) => link, fail(status)),
       {
-        auth: true,
+        guardRole: "user",
         detail: { summary: "Create a short link" },
         body: LinkModel.createBody,
         response: {
           200: LinkModel.link,
           401: AuthModel.unauthorized,
-          403: LinkModel.blocked,
+          403: t.Union([AuthModel.forbidden, LinkModel.blocked]),
           500: internalErrorBody,
         },
       },
@@ -47,12 +47,13 @@ export const links = (deps: Deps) =>
           fail(status),
         ),
       {
-        auth: true,
+        guardRole: "user",
         detail: { summary: "List the signed-in user's links" },
         query: LinkModel.listQuery,
         response: {
           200: t.Array(LinkModel.ownedLink),
           401: AuthModel.unauthorized,
+          403: AuthModel.forbidden,
           500: internalErrorBody,
         },
       },
@@ -79,12 +80,13 @@ export const links = (deps: Deps) =>
           fail(status),
         ),
       {
-        auth: true,
+        guardRole: "user",
         detail: { summary: "Delete one of the signed-in user's links" },
         params: LinkModel.params,
         response: {
           204: t.Void(),
           401: AuthModel.unauthorized,
+          403: AuthModel.forbidden,
           404: LinkModel.notFound,
           500: internalErrorBody,
         },

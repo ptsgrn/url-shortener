@@ -66,13 +66,20 @@ export const parseRegex = (input: string): string | undefined => {
   }
 };
 
-/** The host of a destination URL, normalized like domain rules. */
+/**
+ * The host of an HTTPS destination URL (FR-04), normalized like domain
+ * rules; `undefined` for anything else (unparseable, `http:`, `javascript:`,
+ * `mailto:`…), which the rules then treat as not whitelisted.
+ */
 export const hostOf = (url: string): string | undefined => {
+  let parsed: URL;
   try {
-    return new URL(url).hostname.toLowerCase().replace(/\.$/, "");
+    parsed = new URL(url);
   } catch {
     return undefined;
   }
+  if (parsed.protocol !== "https:") return undefined;
+  return parsed.hostname.toLowerCase().replace(/\.$/, "") || undefined;
 };
 
 /**

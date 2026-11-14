@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { err, errAsync, ok, okAsync, type ResultAsync } from "neverthrow";
 import type { DB } from "../../db/index.ts";
 import { dbQuery, InternalError } from "../../utils/error.ts";
@@ -163,7 +163,9 @@ export abstract class Link {
     return dbQuery(() =>
       db.query.links.findMany({
         where: and(eq(links.userId, userId), notDeleted),
-        orderBy: desc(links.createdAt),
+        // `created_at` has 1-second resolution; `rowid` (insertion order)
+        // breaks ties so offset pages never repeat or skip a link.
+        orderBy: [desc(links.createdAt), desc(sql`rowid`)],
         offset,
         limit,
         columns: {

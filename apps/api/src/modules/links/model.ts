@@ -25,7 +25,14 @@ const status = {
 };
 
 export const LinkModel = {
-  createBody: t.Object({ url: t.String({ format: "uri" }) }),
+  /** HTTPS destinations only (FR-04, 3.4.4): no `http:`, `javascript:`, `data:`, `mailto:`… */
+  createBody: t.Object({
+    url: t.String({
+      format: "uri",
+      pattern: "^[Hh][Tt][Tt][Pp][Ss]://[^/?#]",
+      maxLength: 2048,
+    }),
+  }),
   params: t.Object({ code: t.String() }),
   /**
    * Public view of a link (what `GET /links/:code` returns). Deactivated and
