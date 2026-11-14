@@ -11,10 +11,7 @@ export const updatedAt = () =>
     .notNull()
     .$defaultFn(() => new Date());
 
-export const deletedAt = () =>
-  integer("deleted_at", { mode: "timestamp" })
-    .$type<number | null>()
-    .$default(() => null);
+export const deletedAt = () => integer("deleted_at", { mode: "timestamp" });
 
 export const timestamps = () => ({
   createdAt: createdAt(),
