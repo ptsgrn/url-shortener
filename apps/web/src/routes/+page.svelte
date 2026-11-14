@@ -2,6 +2,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api.ts';
+	import { AuthError, InternalError } from 'api/errors';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -10,12 +11,19 @@
 	let result = $state<{ code: string; url: string } | null>(null);
 	let error = $state<string | null>(null);
 
+	const shortenErrors: Record<AuthError.Unauthorized | InternalError, string> = {
+		[AuthError.Unauthorized]: 'Your session expired. Sign in again.',
+		[InternalError.Database]: 'Something went wrong on our side. Try again.',
+		[InternalError.Crypto]: 'Something went wrong on our side. Try again.'
+	};
+
 	async function shorten(event: SubmitEvent) {
 		event.preventDefault();
 		const res = await api.v1.links.post({ url });
 		if (res.error) {
 			result = null;
-			error = `Request failed (${res.error.status})`;
+			error =
+				res.error.status === 422 ? 'Enter a valid URL.' : shortenErrors[res.error.value.error];
 			return;
 		}
 		error = null;
