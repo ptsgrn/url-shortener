@@ -1,8 +1,17 @@
 import { generateCodeVerifier, generateState } from "arctic";
 import { and, eq } from "drizzle-orm";
-import { Elysia, status } from "elysia";
+import { Elysia } from "elysia";
+import {
+  err,
+  errAsync,
+  ok,
+  ResultAsync,
+  safeTry,
+  type Result,
+} from "neverthrow";
 import type { Deps } from "../../utils/deps.ts";
-import type { UserModel } from "../users/model.ts";
+import { dbQuery, InternalError } from "../../utils/error.ts";
+import type { UserError, UserModel } from "../users/model.ts";
 import { User } from "../users/service.ts";
 import {
   ACCESS_COOKIE,
@@ -11,8 +20,13 @@ import {
   REFRESH_COOKIE,
   type CookieJar,
 } from "./cookie.ts";
-import type { AuthModel } from "./model.ts";
-import { providers, type OAuthProfile } from "./providers/index.ts";
+import {
+  AuthError,
+  AuthErrorStatus,
+  type AuthModel,
+  type RefreshError,
+} from "./model.ts";
+import { providers, type OAuthProvider } from "./providers/index.ts";
 import { accounts } from "./schema.ts";
 import { Token } from "./token.ts";
 
@@ -20,19 +34,24 @@ export type SessionUser = UserModel["user"];
 
 const OAUTH_COOKIES = ["oauth_state", "oauth_verifier", "oauth_redirect"];
 
+const isInternal = (e: string): e is InternalError =>
+  (Object.values(InternalError) as string[]).includes(e);
+
 /** Only allow same-origin relative paths as post-login redirects. */
 const safeRedirect = (value: unknown) =>
   typeof value === "string" && value.startsWith("/") && !value.startsWith("//")
     ? value
     : "/";
 
-const getProvider = (deps: Deps, name: string, origin: string) => {
+const getProvider = (
+  deps: Deps,
+  name: string,
+  origin: string,
+): Result<OAuthProvider, AuthError.UnknownProvider> => {
   const create = providers[name];
-  if (!create)
-    throw status(404, {
-      message: "Unknown provider",
-    } satisfies AuthModel["unknownProvider"]);
-  return create(deps.env, `${origin}/api/v1/auth/${name}/callback`);
+  return create
+    ? ok(create(deps.env, `${origin}/api/v1/auth/${name}/callback`))
+    : err(AuthError.UnknownProvider);
 };
 
 /**
@@ -41,16 +60,18 @@ const getProvider = (deps: Deps, name: string, origin: string) => {
  * Elysia's context, so SvelteKit's `event.cookies` works too.
  */
 export abstract class Auth {
-  private static async setTokens(
+  private static setTokens(
     { env }: Deps,
     jar: CookieJar,
     secure: boolean,
     userId: string,
     refreshToken: string,
-  ) {
-    const opts = cookieOptions(secure);
-    jar.set(ACCESS_COOKIE, await Token.signAccess(env.JWT_SECRET, userId), opts.access);
-    jar.set(REFRESH_COOKIE, refreshToken, opts.refresh);
+  ): ResultAsync<void, InternalError.Crypto> {
+    return Token.signAccess(env.JWT_SECRET, userId).map((accessToken) => {
+      const opts = cookieOptions(secure);
+      jar.set(ACCESS_COOKIE, accessToken, opts.access);
+      jar.set(REFRESH_COOKIE, refreshToken, opts.refresh);
+    });
   }
 
   private static clearTokens(jar: CookieJar, secure: boolean) {
@@ -59,54 +80,72 @@ export abstract class Auth {
     jar.delete(REFRESH_COOKIE, { path: opts.refresh.path });
   }
 
-  static async startSession(
+  static startSession(
     deps: Deps,
     jar: CookieJar,
     secure: boolean,
     userId: string,
-  ) {
-    const { token } = await Token.issueRefresh(deps.db, userId);
-    await Auth.setTokens(deps, jar, secure, userId, token);
+  ): ResultAsync<void, InternalError> {
+    return Token.issueRefresh(deps.db, userId).andThen(({ token }) =>
+      Auth.setTokens(deps, jar, secure, userId, token),
+    );
   }
 
-  /** Rotates the refresh token. Returns the user id, or `null` (cookies cleared). */
-  static async refreshSession(
+  /**
+   * Rotates the refresh token and resolves to the user id. On an auth error
+   * the cookies are cleared; on an internal error they are left alone.
+   */
+  static refreshSession(
     deps: Deps,
     jar: CookieJar,
     secure: boolean,
-  ): Promise<string | null> {
-    const rotated = await Token.rotateRefresh(deps.db, jar.get(REFRESH_COOKIE));
-    if (!rotated) {
-      Auth.clearTokens(jar, secure);
-      return null;
-    }
-    await Auth.setTokens(deps, jar, secure, rotated.userId, rotated.refreshToken);
-    return rotated.userId;
+  ): ResultAsync<string, RefreshError | InternalError> {
+    return Token.rotateRefresh(deps.db, jar.get(REFRESH_COOKIE))
+      .orTee((e) => {
+        if (!isInternal(e)) Auth.clearTokens(jar, secure);
+      })
+      .andThen(({ userId, refreshToken }) =>
+        Auth.setTokens(deps, jar, secure, userId, refreshToken).map(
+          () => userId,
+        ),
+      );
   }
 
-  static async endSession(deps: Deps, jar: CookieJar, secure: boolean) {
-    await Token.revokeRefresh(deps.db, jar.get(REFRESH_COOKIE));
+  /** Revokes the refresh token and clears the cookies (even if revoking fails). */
+  static endSession(
+    deps: Deps,
+    jar: CookieJar,
+    secure: boolean,
+  ): ResultAsync<void, InternalError> {
+    const refreshToken = jar.get(REFRESH_COOKIE);
     Auth.clearTokens(jar, secure);
+    return Token.revokeRefresh(deps.db, refreshToken);
   }
 
   /** The user id from the access token alone (no refresh). */
   static sessionUserId(
     { env }: Deps,
     jar: CookieJar,
-  ): Promise<string | null> {
+  ): ResultAsync<string, AuthError.Unauthorized> {
     return Token.verifyAccess(env.JWT_SECRET, jar.get(ACCESS_COOKIE));
   }
 
   /** The signed-in user, refreshing the session if the access token expired. */
-  static async sessionUser(
+  static sessionUser(
     deps: Deps,
     jar: CookieJar,
     secure: boolean,
-  ): Promise<SessionUser | null> {
-    let userId = await Auth.sessionUserId(deps, jar);
-    if (!userId && jar.get(REFRESH_COOKIE))
-      userId = await Auth.refreshSession(deps, jar, secure);
-    return userId ? User.findById(deps.db, userId) : null;
+  ): ResultAsync<
+    SessionUser,
+    AuthError.Unauthorized | RefreshError | UserError.NotFound | InternalError
+  > {
+    return Auth.sessionUserId(deps, jar)
+      .orElse((e) =>
+        jar.get(REFRESH_COOKIE)
+          ? Auth.refreshSession(deps, jar, secure)
+          : errAsync(e),
+      )
+      .andThen((userId) => User.findById(deps.db, userId));
   }
 
   /** Starts an OAuth sign-in: stores state + PKCE verifier, returns the provider URL. */
@@ -117,84 +156,83 @@ export abstract class Auth {
     origin: string,
     jar: CookieJar,
     secure: boolean,
-  ): string {
-    const provider = getProvider(deps, providerName, origin);
-    const opts = cookieOptions(secure).oauth;
-    const state = generateState();
-    const verifier = generateCodeVerifier();
-    jar.set("oauth_state", state, opts);
-    jar.set("oauth_verifier", verifier, opts);
-    jar.set("oauth_redirect", safeRedirect(redirectTo), opts);
-    return provider.createAuthorizationURL(state, verifier).toString();
+  ): Result<string, AuthError.UnknownProvider> {
+    return getProvider(deps, providerName, origin).map((provider) => {
+      const opts = cookieOptions(secure).oauth;
+      const state = generateState();
+      const verifier = generateCodeVerifier();
+      jar.set("oauth_state", state, opts);
+      jar.set("oauth_verifier", verifier, opts);
+      jar.set("oauth_redirect", safeRedirect(redirectTo), opts);
+      return provider.createAuthorizationURL(state, verifier).toString();
+    });
   }
 
-  /** Completes an OAuth sign-in and starts a session; returns where to redirect. */
-  static async completeSignIn(
+  /** Completes an OAuth sign-in and starts a session; resolves to where to redirect. */
+  static completeSignIn(
     deps: Deps,
     providerName: string,
     { code, state }: AuthModel["callbackQuery"],
     origin: string,
     jar: CookieJar,
     secure: boolean,
-  ): Promise<string> {
-    const provider = getProvider(deps, providerName, origin);
-    const expectedState = jar.get("oauth_state");
-    const verifier = jar.get("oauth_verifier");
-    const redirectTo = safeRedirect(jar.get("oauth_redirect"));
-    const { path } = cookieOptions(secure).oauth;
-    for (const name of OAUTH_COOKIES) jar.delete(name, { path });
+  ): ResultAsync<
+    string,
+    | AuthError.UnknownProvider
+    | AuthError.InvalidOAuthState
+    | AuthError.OAuthExchangeFailed
+    | InternalError
+  > {
+    return safeTry(async function* () {
+      const provider = yield* getProvider(deps, providerName, origin);
 
-    if (!code || !verifier || !expectedState || state !== expectedState)
-      throw status(400, {
-        message: "Invalid OAuth state",
-      } satisfies AuthModel["invalidOAuthState"]);
+      const expectedState = jar.get("oauth_state");
+      const verifier = jar.get("oauth_verifier");
+      const redirectTo = safeRedirect(jar.get("oauth_redirect"));
+      const { path } = cookieOptions(secure).oauth;
+      for (const name of OAUTH_COOKIES) jar.delete(name, { path });
 
-    let profile: OAuthProfile;
-    try {
-      profile = await provider.getProfile(code, verifier);
-    } catch {
-      throw status(400, {
-        message: "OAuth code exchange failed",
-      } satisfies AuthModel["oauthExchangeFailed"]);
-    }
+      if (!code || !verifier || !expectedState || state !== expectedState)
+        return err(AuthError.InvalidOAuthState);
 
-    await Auth.startSession(
-      deps,
-      jar,
-      secure,
-      await Auth.upsertOAuthUser(deps, providerName, profile),
-    );
-    return redirectTo;
+      const profile = yield* ResultAsync.fromThrowable(
+        () => provider.getProfile(code, verifier),
+        () => AuthError.OAuthExchangeFailed as const,
+      )();
+      const userId = yield* Auth.upsertOAuthUser(deps, providerName, profile);
+      yield* Auth.startSession(deps, jar, secure, userId);
+      return ok(redirectTo);
+    });
   }
 
   /** Finds the user linked to this provider account, creating one if needed. */
-  private static async upsertOAuthUser(
+  private static upsertOAuthUser(
     { db }: Deps,
     provider: string,
-    { id, ...profile }: OAuthProfile,
-  ): Promise<string> {
-    const account = await db.query.accounts.findFirst({
-      where: and(
-        eq(accounts.provider, provider),
-        eq(accounts.providerAccountId, id),
-      ),
+    { id, ...profile }: Awaited<ReturnType<OAuthProvider["getProfile"]>>,
+  ): ResultAsync<string, InternalError.Database> {
+    return safeTry(async function* () {
+      const account = yield* dbQuery(() =>
+        db.query.accounts.findFirst({
+          where: and(
+            eq(accounts.provider, provider),
+            eq(accounts.providerAccountId, id),
+          ),
+        }),
+      );
+      if (account) {
+        yield* User.updateProfile(db, account.userId, profile);
+        return ok(account.userId);
+      }
+      const userId = yield* User.create(db, profile);
+      yield* dbQuery(() =>
+        db.insert(accounts).values({ provider, providerAccountId: id, userId }),
+      );
+      return ok(userId);
     });
-    if (account) {
-      await User.updateProfile(db, account.userId, profile);
-      return account.userId;
-    }
-    const userId = await User.create(db, profile);
-    await db
-      .insert(accounts)
-      .values({ provider, providerAccountId: id, userId });
-    return userId;
   }
 }
 
-/**
- * Request-dependent auth service: adds an `auth: true` route option that
- * requires a valid access token cookie and resolves `user`.
- */
 // Elysia dedupes named plugins by `name` + JSON of `seed`; `deps` itself is not
 // serializable (the D1 client is circular), so seed with a stable id per `deps`.
 const seeds = new WeakMap<Deps, number>();
@@ -204,16 +242,17 @@ const seedOf = (deps: Deps) => {
   return seeds.get(deps)!;
 };
 
+/**
+ * Request-dependent auth service: adds an `auth: true` route option that
+ * requires a valid access token cookie and resolves `user`.
+ */
 export const authService = (deps: Deps) =>
   new Elysia({ name: "Auth.Service", seed: seedOf(deps), aot: false }).macro({
     auth: {
-      async resolve({ cookie }) {
-        const userId = await Auth.sessionUserId(deps, elysiaCookieJar(cookie));
-        if (!userId)
-          return status(401, {
-            message: "Unauthorized",
-          } satisfies AuthModel["unauthorized"]);
-        return { user: { id: userId } };
-      },
+      resolve: ({ cookie, status }) =>
+        Auth.sessionUserId(deps, elysiaCookieJar(cookie)).match(
+          (id) => ({ user: { id } }),
+          (error) => status(AuthErrorStatus[error], { error }),
+        ),
     },
   });

@@ -1,6 +1,5 @@
 import { Elysia } from "elysia";
 import type { Deps } from "./utils/deps.ts";
-import { statusErrors } from "./utils/error.ts";
 import { v1 } from "./v1/index.ts";
 
 export type { AuthEnv, Deps } from "./utils/deps.ts";
@@ -19,7 +18,6 @@ export type { AuthEnv, Deps } from "./utils/deps.ts";
  */
 export const createApp = (deps: Deps) =>
   new Elysia({ prefix: "/api", aot: false })
-    .use(statusErrors)
     .get("/health", () => ({ status: "ok" as const }))
     .group("/v1", (app) => app.use(v1(deps)));
 

@@ -1,5 +1,13 @@
 import { t, type UnwrapSchema } from "elysia";
 
+export enum UserError {
+  NotFound = "USER_NOT_FOUND",
+}
+
+export const UserErrorStatus = {
+  [UserError.NotFound]: 404,
+} as const satisfies Record<UserError, number>;
+
 export const UserModel = {
   user: t.Object({
     id: t.String(),
