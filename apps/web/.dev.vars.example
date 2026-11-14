@@ -1,0 +1,7 @@
+# Copy to .dev.vars for local dev. In production: `wrangler secret put <NAME>`.
+# Generate with: openssl rand -base64 32
+JWT_SECRET=
+# https://console.cloud.google.com/apis/credentials
+# Authorized redirect URI: http://localhost:3000/api/v1/auth/google/callback
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=

@@ -1,8 +1,12 @@
-import { env } from 'cloudflare:workers';
-import { createDb, runWithDb } from 'api/db';
+import { Auth } from 'api/auth';
+import { deps } from '#lib/server/app.ts';
 import type { Handle } from '@sveltejs/kit/hooks';
 
-// Bind the request's D1 database so Elysia handlers and load functions can use `getDb()`.
-// `cloudflare:workers` is the real module on Workers and is emulated by the adapter in `vite dev`.
-export const handle: Handle = ({ event, resolve }) =>
-	runWithDb(createDb(env.DB), () => resolve(event));
+// API routes authenticate themselves (see the API's auth service). Page loads
+// resolve the user here, refreshing the session if the access token expired.
+export const handle: Handle = async ({ event, resolve }) => {
+	event.locals.user = event.url.pathname.startsWith('/api/')
+		? null
+		: await Auth.sessionUser(deps, event.cookies, event.url.protocol === 'https:');
+	return resolve(event);
+};

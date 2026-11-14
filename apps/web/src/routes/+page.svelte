@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { invalidateAll } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { api } from '#lib/api.ts';
 	import type { PageProps } from './$types';
 
@@ -19,19 +21,34 @@
 		error = null;
 		result = res.data;
 	}
+
+	async function logout() {
+		await api.v1.auth.logout.post();
+		result = null;
+		await invalidateAll();
+	}
 </script>
 
 <h1>URL shortener</h1>
 <p>API status: {data.health?.status ?? 'unreachable'}</p>
 
-<form onsubmit={shorten}>
-	<input type="url" bind:value={url} required placeholder="https://example.com" />
-	<button type="submit">Shorten</button>
-</form>
+{#if data.user}
+	<p>
+		Signed in as {data.user.name ?? data.user.email}
+		<button type="button" onclick={logout}>Sign out</button>
+	</p>
 
-{#if result}
-	<p>Short code: <code>{result.code}</code> → {result.url}</p>
-{/if}
-{#if error}
-	<p role="alert">{error}</p>
+	<form onsubmit={shorten}>
+		<input type="url" bind:value={url} required placeholder="https://example.com" />
+		<button type="submit">Shorten</button>
+	</form>
+
+	{#if result}
+		<p>Short code: <code>{result.code}</code> → {result.url}</p>
+	{/if}
+	{#if error}
+		<p role="alert">{error}</p>
+	{/if}
+{:else}
+	<p><a href={resolve('/login')}>Sign in</a> to shorten links.</p>
 {/if}

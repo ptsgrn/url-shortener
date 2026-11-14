@@ -1,9 +1,5 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-
-export const links = sqliteTable("links", {
-  code: text("code").primaryKey(),
-  url: text("url").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
+// Aggregates every domain's tables: used by drizzle-kit (see drizzle.config.ts)
+// and by `createDb` for the relational query API (`db.query.*`).
+export * from "../modules/users/schema.ts";
+export * from "../modules/auth/schema.ts";
+export * from "../modules/links/schema.ts";
