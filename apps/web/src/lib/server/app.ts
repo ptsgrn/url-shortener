@@ -1,3 +1,4 @@
+import { dev } from '$app/env';
 import { env } from 'cloudflare:workers';
 import { createApp, type Deps } from 'api';
 import { createDb } from 'api/db';
@@ -8,5 +9,8 @@ import { createDb } from 'api/db';
  */
 export const deps: Deps = { db: createDb(env.DB), env };
 
-/** The Elysia app from `apps/api`, with dependencies injected. */
-export const app = createApp(deps);
+/**
+ * The Elysia app from `apps/api`, with dependencies injected.
+ * In `vite dev` it also serves the OpenAPI UI at /api/openapi.
+ */
+export const app = createApp(deps, { openapi: dev });

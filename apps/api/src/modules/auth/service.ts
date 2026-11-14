@@ -249,6 +249,7 @@ const seedOf = (deps: Deps) => {
 export const authService = (deps: Deps) =>
   new Elysia({ name: "Auth.Service", seed: seedOf(deps), aot: false }).macro({
     auth: {
+      detail: { security: [{ cookieAuth: [] }] },
       resolve: ({ cookie, status }) =>
         Auth.sessionUserId(deps, elysiaCookieJar(cookie)).match(
           (id) => ({ user: { id } }),

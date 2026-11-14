@@ -14,7 +14,11 @@ const fail = failWith({ ...LinkErrorStatus, ...InternalErrorStatus });
 
 /** Short links, at `/links`. Creating one requires a signed-in user. */
 export const links = (deps: Deps) =>
-  new Elysia({ prefix: "/links", aot: false })
+  new Elysia({
+    prefix: "/links",
+    aot: false,
+    detail: { tags: ["Links"] },
+  })
     .use(authService(deps))
     .post(
       "",
@@ -22,6 +26,7 @@ export const links = (deps: Deps) =>
         Link.create(deps.db, body, user.id).match((link) => link, fail(status)),
       {
         auth: true,
+        detail: { summary: "Create a short link" },
         body: LinkModel.createBody,
         response: {
           200: LinkModel.link,
@@ -35,6 +40,7 @@ export const links = (deps: Deps) =>
       ({ params, status }) =>
         Link.find(deps.db, params.code).match((link) => link, fail(status)),
       {
+        detail: { summary: "Look up a short link by code" },
         params: LinkModel.params,
         response: {
           200: LinkModel.link,

@@ -23,7 +23,11 @@ const ok = () => ({ ok: true as const });
 
 /** OAuth sign-in and session management, at `/auth`. */
 export const auth = (deps: Deps) =>
-  new Elysia({ prefix: "/auth", aot: false })
+  new Elysia({
+    prefix: "/auth",
+    aot: false,
+    detail: { tags: ["Auth"] },
+  })
     .use(authService(deps))
     .post(
       "/refresh",
@@ -34,6 +38,9 @@ export const auth = (deps: Deps) =>
           isSecure(request),
         ).match(ok, fail(status)),
       {
+        detail: {
+          summary: "Rotate the refresh token and issue a new access token",
+        },
         response: {
           200: AuthModel.ok,
           401: AuthModel.refreshFailed,
@@ -48,7 +55,10 @@ export const auth = (deps: Deps) =>
           ok,
           fail(status),
         ),
-      { response: { 200: AuthModel.ok, 500: internalErrorBody } },
+      {
+        detail: { summary: "Sign out (revokes the refresh token)" },
+        response: { 200: AuthModel.ok, 500: internalErrorBody },
+      },
     )
     .get(
       "/me",
@@ -61,6 +71,7 @@ export const auth = (deps: Deps) =>
           .match((u) => u, fail(status)),
       {
         auth: true,
+        detail: { summary: "The signed-in user" },
         response: {
           200: UserModel.user,
           401: AuthModel.unauthorized,
@@ -80,6 +91,7 @@ export const auth = (deps: Deps) =>
           isSecure(request),
         ).match((url) => redirect(url, 302), fail(status)),
       {
+        detail: { summary: "Start OAuth sign-in (redirects to the provider)" },
         params: AuthModel.providerParams,
         query: AuthModel.signInQuery,
         response: { 404: AuthModel.unknownProvider },
@@ -97,6 +109,9 @@ export const auth = (deps: Deps) =>
           isSecure(request),
         ).match((to) => redirect(to, 302), fail(status)),
       {
+        detail: {
+          summary: "OAuth callback (sets session cookies, redirects back)",
+        },
         params: AuthModel.providerParams,
         query: AuthModel.callbackQuery,
         response: {
