@@ -5,6 +5,8 @@ import { dbQuery, type InternalError } from "../../utils/error.ts";
 import { UserError, type UserModel } from "./model.ts";
 import { users } from "./schema.ts";
 
+export type Role = "user" | "admin";
+
 const publicColumns = {
   id: true,
   email: true,
@@ -26,6 +28,26 @@ export abstract class User {
         columns: publicColumns,
       }),
     ).andThen((user) => (user ? ok(user) : err(UserError.NotFound)));
+  }
+
+  /** The user's role and ban state, for authorization. */
+  static access(
+    db: DB,
+    id: string,
+  ): ResultAsync<
+    { role: Role; banned: boolean },
+    UserError.NotFound | InternalError.Database
+  > {
+    return dbQuery(() =>
+      db.query.users.findFirst({
+        where: eq(users.id, id),
+        columns: { role: true, bannedAt: true },
+      }),
+    ).andThen((user) =>
+      user
+        ? ok({ role: user.role ?? "user", banned: user.bannedAt != null })
+        : err(UserError.NotFound),
+    );
   }
 
   /** Creates a user and returns its id. */
