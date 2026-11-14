@@ -36,6 +36,10 @@ export const createApp = (deps: Deps, options: AppOptions = {}) =>
           tags: [
             { name: "Auth", description: "OAuth sign-in and sessions" },
             { name: "Links", description: "Short links" },
+            {
+              name: "Rules",
+              description: "Domain whitelist and blacklist (admin only)",
+            },
           ],
           components: {
             securitySchemes: {
