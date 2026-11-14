@@ -10,7 +10,7 @@
 
 	async function shorten(event: SubmitEvent) {
 		event.preventDefault();
-		const res = await api.links.post({ url });
+		const res = await api.v1.links.post({ url });
 		if (res.error) {
 			result = null;
 			error = `Request failed (${res.error.status})`;
