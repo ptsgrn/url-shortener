@@ -13,7 +13,8 @@
       "outputs": [
         ".svelte-kit/**",
         "!.svelte-kit/cache/**",
-        "build/**"
+        "build/**",
+        "dist/**"
       ]
     },
     "lint": {
@@ -28,7 +29,10 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": [
+        "PORT"
+      ]
     }
   }
 }
