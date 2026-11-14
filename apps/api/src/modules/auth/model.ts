@@ -4,6 +4,8 @@ import { errorBody } from "../../utils/error.ts";
 export enum AuthError {
   /** Missing, invalid or expired access token. */
   Unauthorized = "AUTH_UNAUTHORIZED",
+  /** Signed in, but the user's role is too low or the user is banned. */
+  Forbidden = "AUTH_FORBIDDEN",
   /** Missing or unknown refresh token. */
   InvalidRefreshToken = "AUTH_INVALID_REFRESH_TOKEN",
   RefreshTokenExpired = "AUTH_REFRESH_TOKEN_EXPIRED",
@@ -16,6 +18,7 @@ export enum AuthError {
 
 export const AuthErrorStatus = {
   [AuthError.Unauthorized]: 401,
+  [AuthError.Forbidden]: 403,
   [AuthError.InvalidRefreshToken]: 401,
   [AuthError.RefreshTokenExpired]: 401,
   [AuthError.RefreshTokenReused]: 401,
@@ -38,6 +41,7 @@ export const AuthModel = {
   }),
   ok: t.Object({ ok: t.Literal(true) }),
   unauthorized: errorBody(AuthError.Unauthorized),
+  forbidden: errorBody(AuthError.Forbidden),
   refreshFailed: errorBody(
     AuthError.InvalidRefreshToken,
     AuthError.RefreshTokenExpired,

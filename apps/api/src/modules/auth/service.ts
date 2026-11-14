@@ -10,9 +10,13 @@ import {
   type Result,
 } from "neverthrow";
 import type { Deps } from "../../utils/deps.ts";
-import { dbQuery, InternalError } from "../../utils/error.ts";
+import {
+  dbQuery,
+  InternalError,
+  InternalErrorStatus,
+} from "../../utils/error.ts";
 import type { UserError, UserModel } from "../users/model.ts";
-import { User } from "../users/service.ts";
+import { User, type Role } from "../users/service.ts";
 import {
   ACCESS_COOKIE,
   cookieOptions,
@@ -31,6 +35,8 @@ import { accounts } from "./schema.ts";
 import { Token } from "./token.ts";
 
 export type SessionUser = UserModel["user"];
+
+const ROLE_RANK = { user: 0, admin: 1 } as const satisfies Record<Role, number>;
 
 const OAUTH_COOKIES = ["oauth_state", "oauth_verifier", "oauth_redirect"];
 
@@ -256,4 +262,33 @@ export const authService = (deps: Deps) =>
           (error) => status(AuthErrorStatus[error], { error }),
         ),
     },
+    /**
+     * `guardRole: "user" | "admin"`: like `auth: true`, but also requires the
+     * user to hold at least that role (admin outranks user) and not be
+     * banned. Resolves `user` with its `role`.
+     */
+    guardRole: (required: Role) => ({
+      detail: { security: [{ cookieAuth: [] }] },
+      resolve: ({ cookie, status }) =>
+        Auth.sessionUserId(deps, elysiaCookieJar(cookie))
+          .andThen((id) =>
+            User.access(deps.db, id)
+              // A valid token for a user that no longer exists.
+              .mapErr((e) =>
+                isInternal(e) ? e : (AuthError.Unauthorized as const),
+              )
+              .andThen(({ role, banned }) =>
+                !banned && ROLE_RANK[role] >= ROLE_RANK[required]
+                  ? ok({ id, role })
+                  : err(AuthError.Forbidden as const),
+              ),
+          )
+          .match(
+            (user) => ({ user }),
+            (error) =>
+              isInternal(error)
+                ? status(InternalErrorStatus[error], { error })
+                : status(AuthErrorStatus[error], { error }),
+          ),
+    }),
   });
