@@ -7,6 +7,8 @@ import type { Handle } from '@sveltejs/kit/hooks';
 export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.user = event.url.pathname.startsWith('/api/')
 		? null
-		: await Auth.sessionUser(deps, event.cookies, event.url.protocol === 'https:');
+		: // Any error (no session, expired, internal) renders the page signed out;
+			// internal errors are already logged by the API.
+			await Auth.sessionUser(deps, event.cookies, event.url.protocol === 'https:').unwrapOr(null);
 	return resolve(event);
 };
