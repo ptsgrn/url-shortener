@@ -1,10 +1,8 @@
 import { sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { createdAt } from "../../db/columns.ts";
+import { createdAt, id } from "../../db/columns.ts";
 
 export const users = sqliteTable("users", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
+  id: id(),
   email: text("email"),
   name: text("name"),
   avatarUrl: text("avatar_url"),

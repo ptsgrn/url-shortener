@@ -15,6 +15,13 @@
       "when": 1794659446123,
       "tag": "0001_majestic_wilson_fisk",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794664087031,
+      "tag": "0002_cute_bushwacker",
+      "breakpoints": true
     }
   ]
 }

@@ -1,17 +1,18 @@
 import {
   index,
   integer,
-  primaryKey,
   sqliteTable,
   text,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
-import { createdAt } from "../../db/columns.ts";
+import { createdAt, id } from "../../db/columns.ts";
 import { users } from "../users/schema.ts";
 
 /** One row per (provider, provider user id); a user can link many providers. */
 export const accounts = sqliteTable(
   "accounts",
   {
+    id: id(),
     provider: text("provider").notNull(),
     providerAccountId: text("provider_account_id").notNull(),
     userId: text("user_id")
@@ -20,7 +21,10 @@ export const accounts = sqliteTable(
     createdAt: createdAt(),
   },
   (t) => [
-    primaryKey({ columns: [t.provider, t.providerAccountId] }),
+    uniqueIndex("accounts_provider_account_idx").on(
+      t.provider,
+      t.providerAccountId,
+    ),
     index("accounts_user_id_idx").on(t.userId),
   ],
 );
@@ -29,9 +33,7 @@ export const accounts = sqliteTable(
 export const refreshTokens = sqliteTable(
   "refresh_tokens",
   {
-    id: text("id")
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
+    id: id(),
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
