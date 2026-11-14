@@ -5,3 +5,5 @@ JWT_SECRET=
 # Authorized redirect URI: http://localhost:3000/api/v1/auth/google/callback
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+# Enables /api/dev (sign in as any user). Local only; never set in production.
+DEV_TOOLS=true

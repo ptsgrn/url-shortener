@@ -1,157 +1,101 @@
-# Turborepo starter
+# URL Shortener
 
-This Turborepo starter is maintained by the Turborepo core team.
+A simple URL shortener service built with Elysia, Drizzle ORM, and D1 SQLite. It allows users to shorten long URLs and redirect to the original URL when accessing the shortened link. Also have simple analytics to track the number of clicks on each shortened URL and the ability to manage user accounts and moderation on the shortened URLs.
 
-## Using this example
+## Setup
 
-Run the following command:
+This repository uses [bun](https://bun.sh/) as the package manager. Make sure you have bun installed on your machine. Also this project uses [turborepo](https://turbo.build/repo) to manage multiple packages.
 
-```sh
-npx create-turbo@latest
+After setting up bun, you can install the dependencies by running the following command in the root directory of the project:
+
+```bash
+bun install
 ```
 
-## What's inside?
+Next, setting up your environment variables. You can copy the `apps/web/.dev.vars.example` file to `apps/web/.dev.vars`. `JWT_SECRET` is used to sign the JWT token for authentication. You can generate a random secret using `openssl rand -hex 32` command. `DEV_TOOLS=true` enables the [dev sign-in endpoints](#signing-in-without-google), so you can sign in without Google during development. And for `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, while not required on development, you can create a project on [Google Cloud Console](https://console.cloud.google.com/) and create OAuth 2.0 credentials to get the client ID and secret. You can also use [this guide](https://developers.google.com/identity/protocols/oauth2) to set up Google OAuth 2.0.
 
-This Turborepo includes the following packages/apps:
-
-### Apps and Packages
-
-- `web`: a [SvelteKit](https://svelte.dev/docs/kit) app
-- `@repo/eslint-config`: shared `eslint` base configuration (includes `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```bash
+cp apps/web/.dev.vars.example apps/web/.dev.vars
 ```
 
-Without global `turbo`, use your package manager:
+Then create the local database by applying the migrations:
 
-```sh
-cd my-turborepo
-npx turbo build
-bun exec turbo build
-bun exec turbo build
+```bash
+bun run --cwd apps/web db:migrate
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+This should good to go! Use the `bun dev` command to start the development server. Frontend will be available at `http://localhost:3000` and openapi spec API will be available at `http://localhost:3000/api/openapi`.
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+## Development
 
-```sh
-turbo build --filter=web
+### Project Structure
+
+This project is structured as a monorepo with the following packages:
+
+```
+apps/
+  api/ - The backend Elysia API.
+  web/ - The SvelteKit frontend.
+packages/
+  eslint-config/ - The shared ESLint config.
+  typescript-config/ - The shared TypeScript config.
 ```
 
-Without global `turbo`:
+The `apps/api` is not an standalone Elysia but imported into the `apps/web` SvelteKit project. The `apps/web` is the main entry point of the application.
 
-```sh
-npx turbo build --filter=web
-bun exec turbo build --filter=web
-bun exec turbo build --filter=web
+### Running the Development Server
+
+To start the development server, run the following command in the root directory of the project:
+
+```bash
+bun dev
 ```
 
-### Develop
+### Signing in Without Google
 
-To develop all apps and packages, run the following command:
+In development, the API serves helper endpoints under `/api/dev` that create users and sign in as any of them, so you can test logged-in features (such as creating links) without Google OAuth. Both regular users and admins can be mocked.
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+| Method | Path                       | Description                                                                                                                     |
+| ------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/dev/users`           | List the users you can sign in as, with their role.                                                                             |
+| `POST` | `/api/dev/users`           | Create a user and sign in as them. Body: `{ name?, email?, avatarUrl?, role?: "user" \| "admin" }` (role defaults to `"user"`). |
+| `POST` | `/api/dev/users/:id/login` | Sign in as an existing user.                                                                                                    |
 
-```sh
-cd my-turborepo
-turbo dev
+Signing in sets the same session cookies as a Google sign-in. The easiest way to call them is the OpenAPI page at `http://localhost:3000/api/openapi` (the "Dev" tag), or with curl:
+
+```bash
+# Create an admin and save the session cookies
+curl -c cookies.txt -X POST http://localhost:3000/api/dev/users \
+  -H 'content-type: application/json' -d '{"name":"Ada","role":"admin"}'
+
+# Use the session
+curl -b cookies.txt http://localhost:3000/api/v1/auth/me
 ```
 
-Without global `turbo`, use your package manager:
+These endpoints sign in as anyone without credentials, so they are locked down. Each of these checks alone keeps them off (see `apps/api/src/modules/dev/guard.ts`):
 
-```sh
-cd my-turborepo
-npx turbo dev
-bun exec turbo dev
-bun exec turbo dev
+1. They are only mounted in development (`bun dev`). Production builds don't include them.
+2. `DEV_TOOLS=true` must be set in `apps/web/.dev.vars`. **Never set it as a Wrangler secret or var.**
+3. Every request must be made to `localhost` from the same machine. Anything else gets `404 DEV_DISABLED`.
+
+After changing `DEV_TOOLS`, restart `bun dev`; `.dev.vars` is only read at startup.
+
+### Browsing the Database
+
+To inspect or edit the local D1 database with [Drizzle Studio](https://orm.drizzle.team/drizzle-studio/overview), run the following command in the root directory of the project:
+
+```bash
+bun db:studio
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+Then open [https://local.drizzle.studio](https://local.drizzle.studio) in your browser. It opens the same local database that `bun dev` uses, so apply the migrations first with `bun run --cwd apps/web db:migrate`.
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+### Testing
 
-```sh
-turbo dev --filter=web
+Running the tests can be done by running the following command in the root directory of the project:
+
+```bash
+bun test
 ```
 
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-bun exec turbo dev --filter=web
-bun exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-bun exec turbo login
-bun exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-bun exec turbo link
-bun exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+For writing tests, you can use the `bun test --watch` command to run tests in watch mode. This will automatically rerun the tests whenever you make changes to the code. More information on testing can be found in the [bun documentation](https://bun.sh/docs/cli/test).

@@ -31,8 +31,13 @@
       "cache": false,
       "persistent": true,
       "passThroughEnv": [
-        "PORT"
+        "PORT",
+        "NODE_ENV"
       ]
+    },
+    "db:studio": {
+      "cache": false,
+      "persistent": true
     }
   }
 }
