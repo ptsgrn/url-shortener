@@ -1,5 +1,9 @@
 <script lang="ts">
+	import { dev } from '$app/env';
 	import { page } from '$app/state';
+	import type { PageProps } from './$types';
+
+	let { data }: PageProps = $props();
 
 	const redirectTo = $derived(page.url.searchParams.get('redirectTo') ?? '/');
 </script>
@@ -10,3 +14,10 @@
 <a href={`/api/v1/auth/google?redirectTo=${encodeURIComponent(redirectTo)}`} data-sveltekit-reload
 	>Sign in with Google</a
 >
+
+<!-- `dev` is a build-time constant, so production builds drop the dev panel's chunk. -->
+{#if dev && data.devTools}
+	{#await import('./DevLogin.svelte') then { default: DevLogin }}
+		<DevLogin {redirectTo} />
+	{/await}
+{/if}
