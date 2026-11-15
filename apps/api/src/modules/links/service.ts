@@ -2,6 +2,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { err, errAsync, ok, okAsync, type ResultAsync } from "neverthrow";
 import type { DB } from "../../db/index.ts";
 import { dbQuery, InternalError } from "../../utils/error.ts";
+import { Audit, changes } from "../audit/service.ts";
 import { Rule } from "../rules/service.ts";
 import { LinkError, type LinkModel } from "./model.ts";
 import { randomCode } from "./random.ts";
@@ -65,7 +66,7 @@ const statusOf = (link: {
         : "active";
 
 /** `withBlocked` plus the combined `status` (see `LinkModel`). */
-const withStatus = <
+export const withStatus = <
   T extends { url: string; bannedAt: Date | null; deactivatedAt: Date | null },
 >(
   db: DB,
@@ -288,7 +289,7 @@ export abstract class Link {
     if (userId !== undefined && !admin)
       return errAsync(LinkError.OwnerChangeForbidden as const);
 
-    const destinationOk = (link: { id: string; deactivatedAt: Date | null }) =>
+    const destinationOk = <T>(link: T) =>
       url === undefined
         ? okAsync(link)
         : Rule.check(db, url).andThen((verdict) =>
@@ -309,6 +310,7 @@ export abstract class Link {
         where: byCode(code),
         columns: {
           id: true,
+          url: true,
           userId: true,
           bannedAt: true,
           deactivatedAt: true,
@@ -323,40 +325,59 @@ export abstract class Link {
       })
       .andThen(destinationOk)
       .andThen(ownerOk)
-      .andThen((link) =>
-        dbQuery(() =>
-          db
-            .update(links)
-            .set({
-              url,
-              userId,
-              // Turning off twice keeps the original time (idempotent).
-              ...(active === false && {
-                deactivatedAt: link.deactivatedAt ?? new Date(),
-              }),
-              ...(active === true && {
-                deactivatedAt: null,
-                deactivatedReason: null,
-              }),
-              updatedAt: new Date(),
-            })
-            // Not deleted in the meantime.
-            .where(and(eq(links.id, link.id), notDeleted))
-            .returning({
-              id: links.id,
-              code: links.code,
-              url: links.url,
-              userId: links.userId,
-              createdAt: links.createdAt,
-              updatedAt: links.updatedAt,
-              deactivatedAt: links.deactivatedAt,
-              deactivatedReason: links.deactivatedReason,
-              bannedAt: links.bannedAt,
-              bannedReason: links.bannedReason,
-            })
-            .get(),
-        ),
-      )
+      .andThen((link) => {
+        const write = db
+          .update(links)
+          .set({
+            url,
+            userId,
+            // Turning off twice keeps the original time (idempotent).
+            ...(active === false && {
+              deactivatedAt: link.deactivatedAt ?? new Date(),
+            }),
+            ...(active === true && {
+              deactivatedAt: null,
+              deactivatedReason: null,
+            }),
+            updatedAt: new Date(),
+          })
+          // Not deleted in the meantime.
+          .where(and(eq(links.id, link.id), notDeleted))
+          .returning({
+            id: links.id,
+            code: links.code,
+            url: links.url,
+            userId: links.userId,
+            createdAt: links.createdAt,
+            updatedAt: links.updatedAt,
+            deactivatedAt: links.deactivatedAt,
+            deactivatedReason: links.deactivatedReason,
+            bannedAt: links.bannedAt,
+            bannedReason: links.bannedReason,
+          });
+        // Owners editing their own links aren't audited; an admin changing
+        // someone else's is, in the same transaction as the change.
+        if (!admin || link.userId === actor.id)
+          return dbQuery(() => write.get());
+        const entry = Audit.afterWrite(db, {
+          actorId: actor.id,
+          action: "link.update",
+          targetType: "link",
+          targetId: link.id,
+          details: {
+            code,
+            ...changes(
+              {
+                url: link.url,
+                active: link.deactivatedAt === null,
+                userId: link.userId,
+              },
+              { url, active, userId },
+            ),
+          },
+        });
+        return dbQuery(() => db.batch([write, entry])).map(([rows]) => rows[0]);
+      })
       .andThen((row) => (row ? ok(row) : err(LinkError.NotFound)))
       .andThen((row) => withStatus(db, [row]).map(([updated]) => updated!));
   }
