@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { banLink, findStored, linkApi, today, ok } from "./api.ts";
+import { linkVisits } from "../src/modules/stats/schema.ts";
 import { createLink, useSuite } from "./fixtures.ts";
 
 /**
@@ -104,6 +105,33 @@ describe("FR-11: visit stats", () => {
     });
     expect(before.body.total).toBe(0);
     expect(before.body.daily).toEqual([]);
+  });
+
+  test("groups by UTC day and filters on UTC day boundaries", async () => {
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    const link = await t.h.db.query.links.findFirst({
+      where: (l, { eq }) => eq(l.code, code),
+    });
+    await t.h.db.insert(linkVisits).values(
+      [
+        "2026-03-01T23:59:59Z", // last second of Mar 1 (UTC)
+        "2026-03-02T00:00:00Z", // first second of Mar 2
+        "2026-03-02T16:30:00Z", // still Mar 2 in UTC (Mar 3 in UTC+7)
+      ].map((at) => ({ linkId: link!.id, visitedAt: new Date(at) })),
+    );
+    const all = await ok(api().stats(code, t.owner));
+    expect(all.daily).toEqual([
+      { date: "2026-03-01", count: 1 },
+      { date: "2026-03-02", count: 2 },
+    ]);
+    const mar2 = await ok(
+      api().stats(code, t.owner, { from: "2026-03-02", to: "2026-03-02" }),
+    );
+    expect(mar2.total).toBe(2);
+    const mar1 = await ok(
+      api().stats(code, t.owner, { from: "2026-03-01", to: "2026-03-01" }),
+    );
+    expect(mar1.total).toBe(1);
   });
 
   test("rejects a range that ends before it starts", async () => {

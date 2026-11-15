@@ -1,8 +1,5 @@
 import { UAParser } from "ua-parser-js";
 
-/** Days in stats are Asia/Bangkok calendar days (UTC+7, no DST). */
-export const BANGKOK_OFFSET_SECONDS = 7 * 60 * 60;
-
 const DESKTOP_OS = new Set([
   "Windows",
   "Mac OS",
@@ -45,16 +42,17 @@ export const referrerHost = (
   }
 };
 
-/** `YYYY-MM-DD` of `date` in Bangkok. */
-export const bangkokDay = (date: Date): string =>
-  new Date(date.getTime() + BANGKOK_OFFSET_SECONDS * 1000)
-    .toISOString()
-    .slice(0, 10);
+/*
+ * Stats days are UTC calendar days: visits are stored as UTC timestamps and
+ * grouped by their UTC date. Clients convert to the viewer's time zone.
+ */
 
-/** Start of Bangkok day `day` (`YYYY-MM-DD`), as a Date. */
-export const bangkokDayStart = (day: string): Date =>
-  new Date(Date.parse(`${day}T00:00:00Z`) - BANGKOK_OFFSET_SECONDS * 1000);
+/** `YYYY-MM-DD` of `date` in UTC. */
+export const utcDay = (date: Date): string => date.toISOString().slice(0, 10);
 
-/** Start of the Bangkok day after `day`: the exclusive end of an inclusive range. */
-export const bangkokDayEnd = (day: string): Date =>
-  new Date(bangkokDayStart(day).getTime() + 24 * 60 * 60 * 1000);
+/** Start (00:00 UTC) of day `day` (`YYYY-MM-DD`). */
+export const dayStart = (day: string): Date => new Date(`${day}T00:00:00Z`);
+
+/** Start of the UTC day after `day`: the exclusive end of an inclusive range. */
+export const dayEnd = (day: string): Date =>
+  new Date(dayStart(day).getTime() + 24 * 60 * 60 * 1000);

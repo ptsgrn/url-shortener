@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { links } from "../src/modules/links/schema.ts";
-import { bangkokDay } from "../src/modules/stats/parse.ts";
+import { utcDay } from "../src/modules/stats/parse.ts";
 import { users } from "../src/modules/users/schema.ts";
 import { expect } from "bun:test";
 import type { Harness, TestResponse, TestUser } from "./harness.ts";
@@ -128,5 +128,5 @@ export const findStored = async (
   return hits;
 };
 
-/** Today in Asia/Bangkok (stats days), `YYYY-MM-DD`. */
-export const today = () => bangkokDay(new Date());
+/** Today in UTC (stats days), `YYYY-MM-DD`. */
+export const today = () => utcDay(new Date());

@@ -19,7 +19,7 @@ const breakdown = t.Record(t.String(), t.Number());
 
 export const StatsModel = {
   params: t.Object({ code: t.String() }),
-  /** Inclusive Bangkok calendar days; either end may be omitted. */
+  /** Inclusive UTC calendar days; either end may be omitted. */
   query: t.Object({ from: t.Optional(day), to: t.Optional(day) }),
   summary: t.Object({
     /** Redirects, repeats included: not unique people. */

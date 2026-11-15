@@ -40,7 +40,7 @@ export const stats = (deps: Deps) =>
         detail: {
           summary: "Visit stats for one of the signed-in user's links",
           description:
-            "Total, per day and by device, browser and referrer domain, over inclusive Asia/Bangkok days `from`..`to`. Counts redirects, not unique people. Values that couldn't be detected are under `unknown`.",
+            "Total, per day and by device, browser and referrer domain, over inclusive UTC days `from`..`to` (`daily` dates are UTC too). Counts redirects, not unique people. Values that couldn't be detected are under `unknown`.",
         },
         params: StatsModel.params,
         query: StatsModel.query,

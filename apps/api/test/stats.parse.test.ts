@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
-  bangkokDay,
-  bangkokDayEnd,
-  bangkokDayStart,
   browserOf,
   deviceOf,
+  dayEnd,
+  dayStart,
   referrerHost,
+  utcDay,
 } from "../src/modules/stats/parse.ts";
 
 const UA = {
@@ -61,18 +61,18 @@ describe("referrerHost", () => {
   ])("%p → null", (header) => expect(referrerHost(header)).toBeNull());
 });
 
-describe("Bangkok days", () => {
-  test("a day starts at 17:00 UTC the day before", () => {
-    expect(bangkokDayStart("2026-11-15").toISOString()).toBe(
-      "2026-11-14T17:00:00.000Z",
+describe("UTC days", () => {
+  test("a day runs from 00:00 UTC to the next 00:00 UTC", () => {
+    expect(dayStart("2026-11-15").toISOString()).toBe(
+      "2026-11-15T00:00:00.000Z",
     );
-    expect(bangkokDayEnd("2026-11-15").toISOString()).toBe(
-      "2026-11-15T17:00:00.000Z",
-    );
+    expect(dayEnd("2026-11-15").toISOString()).toBe("2026-11-16T00:00:00.000Z");
+    expect(dayEnd("2026-12-31").toISOString()).toBe("2027-01-01T00:00:00.000Z");
   });
 
-  test("late UTC evening is already tomorrow in Bangkok", () => {
-    expect(bangkokDay(new Date("2026-11-14T16:59:59Z"))).toBe("2026-11-14");
-    expect(bangkokDay(new Date("2026-11-14T17:00:00Z"))).toBe("2026-11-15");
+  test("the day changes at midnight UTC, not local midnight", () => {
+    expect(utcDay(new Date("2026-11-14T23:59:59Z"))).toBe("2026-11-14");
+    expect(utcDay(new Date("2026-11-15T00:00:00Z"))).toBe("2026-11-15");
+    expect(utcDay(new Date("2026-11-15T06:00:00+07:00"))).toBe("2026-11-14");
   });
 });

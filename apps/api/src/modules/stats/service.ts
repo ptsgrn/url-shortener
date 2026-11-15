@@ -6,10 +6,9 @@ import { LinkError } from "../links/model.ts";
 import { links } from "../links/schema.ts";
 import { StatsError, type StatsModel } from "./model.ts";
 import {
-  BANGKOK_OFFSET_SECONDS,
-  bangkokDayEnd,
-  bangkokDayStart,
   browserOf,
+  dayEnd,
+  dayStart,
   deviceOf,
   referrerHost,
 } from "./parse.ts";
@@ -49,7 +48,7 @@ export abstract class Stats {
   }
 
   /**
-   * Visit stats for the owner's link `code` (FR-11), over inclusive Bangkok
+   * Visit stats for the owner's link `code` (FR-11), over inclusive UTC
    * days `from`..`to` (either may be omitted). Someone else's or a deleted
    * link is `NotFound`.
    */
@@ -83,10 +82,11 @@ export abstract class Stats {
       .andThen((linkId) => {
         const where = and(
           eq(linkVisits.linkId, linkId),
-          from ? gte(linkVisits.visitedAt, bangkokDayStart(from)) : undefined,
-          to ? lt(linkVisits.visitedAt, bangkokDayEnd(to)) : undefined,
+          from ? gte(linkVisits.visitedAt, dayStart(from)) : undefined,
+          to ? lt(linkVisits.visitedAt, dayEnd(to)) : undefined,
         );
-        const day = sql<string>`date(${linkVisits.visitedAt} + ${BANGKOK_OFFSET_SECONDS}, 'unixepoch')`;
+        // `visited_at` is Unix seconds, so this is the visit's UTC date.
+        const day = sql<string>`date(${linkVisits.visitedAt}, 'unixepoch')`;
         const by = (
           key:
             | typeof linkVisits.device
