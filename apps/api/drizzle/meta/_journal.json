@@ -50,6 +50,13 @@
       "when": 1794732134823,
       "tag": "0006_volatile_surge",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1794745488227,
+      "tag": "0007_medical_nekra",
+      "breakpoints": true
     }
   ]
 }
