@@ -14,6 +14,12 @@ export const UserModel = {
     email: t.Nullable(t.String()),
     name: t.Nullable(t.String()),
     avatarUrl: t.Nullable(t.String()),
+    role: t.Union([t.Literal("user"), t.Literal("admin")]),
+    /**
+     * Suspended by an admin (FR-15): signed in, but can't use the management
+     * API, and their links don't redirect.
+     */
+    suspended: t.Boolean(),
   }),
   profile: t.Object({
     email: t.Optional(t.String()),
