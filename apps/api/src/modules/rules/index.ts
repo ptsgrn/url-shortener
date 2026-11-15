@@ -71,8 +71,8 @@ export const rules = (deps: Deps) =>
     )
     .patch(
       "/:id",
-      ({ params, body, status }) =>
-        Rule.update(deps.db, params.id, body).match(
+      ({ params, body, user, status }) =>
+        Rule.update(deps.db, params.id, body, user.id).match(
           (rule) => rule,
           fail(status),
         ),
@@ -94,8 +94,8 @@ export const rules = (deps: Deps) =>
     )
     .delete(
       "/:id",
-      ({ params, status }) =>
-        Rule.delete(deps.db, params.id).match(
+      ({ params, user, status }) =>
+        Rule.delete(deps.db, params.id, user.id).match(
           () => status(204, undefined),
           fail(status),
         ),
