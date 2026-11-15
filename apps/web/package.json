@@ -17,7 +17,8 @@
 		"check-types": "wrangler types --no-include-main-module --check && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"gen": "wrangler types --no-include-main-module",
 		"db:migrate": "wrangler d1 migrations apply DB --local",
-		"db:migrate:remote": "wrangler d1 migrations apply DB --remote"
+		"db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+		"deploy": "bun scripts/deploy.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",

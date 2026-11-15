@@ -12,7 +12,7 @@ After setting up bun, you can install the dependencies by running the following 
 bun install
 ```
 
-Next, setting up your environment variables. You can copy the `apps/web/.dev.vars.example` file to `apps/web/.dev.vars`. `JWT_SECRET` is used to sign the JWT token for authentication. You can generate a random secret using `openssl rand -hex 32` command. `DEV_TOOLS=true` enables the [dev sign-in endpoints](#signing-in-without-google), so you can sign in without Google during development. And for `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, while not required on development, you can create a project on [Google Cloud Console](https://console.cloud.google.com/) and create OAuth 2.0 credentials to get the client ID and secret. You can also use [this guide](https://developers.google.com/identity/protocols/oauth2) to set up Google OAuth 2.0.
+Next, setting up your environment variables. You can copy the `apps/web/.dev.vars.example` file to `apps/web/.dev.vars`. `JWT_SECRET` is used to sign the JWT token for authentication. You can generate a random secret using `openssl rand -hex 32` command. Uncommenting `DEV_TOOLS=true` enables the [dev sign-in endpoints](#signing-in-without-google), so you can sign in without Google during development. And for `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, while not required on development, you can create a project on [Google Cloud Console](https://console.cloud.google.com/) and create OAuth 2.0 credentials to get the client ID and secret. You can also use [this guide](https://developers.google.com/identity/protocols/oauth2) to set up Google OAuth 2.0.
 
 ```bash
 cp apps/web/.dev.vars.example apps/web/.dev.vars
@@ -99,3 +99,32 @@ bun test
 ```
 
 For writing tests, you can use the `bun test --watch` command to run tests in watch mode. This will automatically rerun the tests whenever you make changes to the code. More information on testing can be found in the [bun documentation](https://bun.sh/docs/cli/test).
+
+## Deployment
+
+Production runs on Cloudflare Workers, built and deployed by [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/) on every push. The repository holds no account state: `apps/web/wrangler.jsonc` names the D1 database (`url-shortener`) but has no database ID. The first deploy creates the database and links it to the Worker, and later deploys stay linked. Secrets live in Cloudflare, never in the repository.
+
+### First-time setup
+
+1. In the Cloudflare dashboard, go to **Workers & Pages → Create → Import a repository** and pick this repository. Name the Worker `url-shortener`, the `name` in `apps/web/wrangler.jsonc`.
+2. Set the build settings:
+
+   | Setting        | Value                    |
+   | -------------- | ------------------------ |
+   | Root directory | `apps/web`               |
+   | Build command  | `bun run build`          |
+   | Deploy command | `bun run deploy`         |
+   | Build variable | `BUN_VERSION` = `1.3.14` |
+   | Build variable | `NODE_VERSION` = `24`    |
+
+3. After the Worker is created, add its secrets under **Settings → Variables and Secrets** (or with `bunx wrangler secret put <NAME>` in `apps/web`):
+   - `JWT_SECRET`: generate one with `openssl rand -hex 32`.
+   - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`: from your Google OAuth client. Add `https://<your-domain>/api/v1/auth/google/callback` to its authorized redirect URIs.
+
+   Never set `DEV_TOOLS` in production.
+
+### What a deploy does
+
+`bun run deploy` (`apps/web/scripts/deploy.ts`) applies the D1 migrations in `apps/api/drizzle` and runs `wrangler deploy`. If the database already exists, it migrates first, so new code never runs against an old schema. On the very first deploy it deploys first, which creates the database, then migrates. Keep migrations backward compatible (add columns and tables rather than renaming or dropping them in the same release), since the running Worker serves requests while they apply.
+
+You can also deploy from your machine after `bunx wrangler login`, by running `bun run deploy` in `apps/web`. If Wrangler writes a `database_id` into `wrangler.jsonc` while doing so, don't commit it.
