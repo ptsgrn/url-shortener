@@ -1,6 +1,8 @@
 <script lang="ts">
 	// /api/dev is left out of the typed client, so plain fetch.
 	import { onMount } from 'svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
 
 	type Role = 'user' | 'admin';
 	type DevUser = {
@@ -67,60 +69,46 @@
 	});
 </script>
 
-<section aria-labelledby="dev-login">
-	<h2 id="dev-login">Dev sign-in</h2>
-	<p><small>Local only (<code>DEV_TOOLS=true</code>). Skips Google OAuth.</small></p>
+<section
+	aria-labelledby="dev-login"
+	class="mt-8 rounded-md border-2 border-dashed border-amber-600 p-4 text-sm"
+>
+	<h2 id="dev-login" class="text-lg font-semibold">Dev sign-in</h2>
+	<p class="text-muted-foreground">
+		Local only (<code>DEV_TOOLS=true</code>). Skips Google OAuth.
+	</p>
 
 	{#if error}
-		<p role="alert">{error}</p>
+		<p role="alert" class="mt-2 text-destructive">{error}</p>
 	{/if}
 
-	<h3>Existing users</h3>
+	<h3 class="mt-4 font-medium">Existing users</h3>
 	{#if users === null}
 		<p>Loading…</p>
 	{:else if users.length === 0}
 		<p>No users yet. Create one below.</p>
 	{:else}
-		<ul>
+		<ul class="mt-1 flex flex-col gap-1">
 			{#each users as user (user.id)}
-				<li>
-					<button type="button" disabled={busy} onclick={() => loginAs(user.id)}>
+				<li class="flex items-center gap-2">
+					<Button size="sm" disabled={busy} onclick={() => loginAs(user.id)}>
 						{user.name ?? user.email ?? user.id}
-					</button>
-					{#if user.email && user.name}<small>{user.email}</small>{/if}
-					{#if user.role === 'admin'}<strong>admin</strong>{/if}
+					</Button>
+					{#if user.email && user.name}<small class="truncate">{user.email}</small>{/if}
+					{#if user.role === 'admin'}<strong class="text-brand">admin</strong>{/if}
 				</li>
 			{/each}
 		</ul>
 	{/if}
 
-	<h3>New user</h3>
-	<form onsubmit={create}>
-		<input bind:value={name} placeholder="Name (optional)" />
-		<input type="email" bind:value={email} placeholder="Email (optional)" />
-		<select bind:value={role}>
+	<h3 class="mt-4 font-medium">New user</h3>
+	<form onsubmit={create} class="mt-1 flex flex-col gap-2">
+		<Input bind:value={name} placeholder="Name (optional)" />
+		<Input type="email" bind:value={email} placeholder="Email (optional)" />
+		<select bind:value={role} class="h-8 rounded-lg border border-input bg-card px-2">
 			<option value="user">user</option>
 			<option value="admin">admin</option>
 		</select>
-		<button type="submit" disabled={busy}>Create and sign in</button>
+		<Button type="submit" disabled={busy}>Create and sign in</Button>
 	</form>
 </section>
-
-<style>
-	section {
-		margin-top: 2rem;
-		padding: 1rem;
-		border: 2px dashed #d97706;
-		border-radius: 0.5rem;
-	}
-	ul {
-		padding-left: 0;
-		list-style: none;
-	}
-	li {
-		display: flex;
-		gap: 0.5rem;
-		align-items: center;
-		margin-block: 0.25rem;
-	}
-</style>
