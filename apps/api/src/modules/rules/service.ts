@@ -12,6 +12,7 @@ import {
   type RegexMatcher,
   type Verdict,
 } from "./matcher.ts";
+import { Audit, changes } from "../audit/service.ts";
 import { RuleError, type RuleModel } from "./model.ts";
 import { rules, rulesVersion, type RuleList, type RuleType } from "./schema.ts";
 
@@ -165,15 +166,23 @@ export abstract class Rule {
     RuleModel["rule"],
     RuleError.InvalidPattern | RuleError.Duplicate | InternalError.Database
   > {
+    const id = crypto.randomUUID();
     return parsePattern(type, pattern)
       .asyncAndThen((pattern) =>
         dbQuery(() =>
           db.batch([
             db
               .insert(rules)
-              .values({ list, type, pattern, createdBy: userId })
+              .values({ id, list, type, pattern, createdBy: userId })
               .onConflictDoNothing()
               .returning(),
+            Audit.afterWrite(db, {
+              actorId: userId,
+              action: "rule.create",
+              targetType: "rule",
+              targetId: id,
+              details: { list, type, pattern },
+            }),
             bumpVersion(db),
           ]),
         ),
@@ -186,6 +195,7 @@ export abstract class Rule {
     db: DB,
     id: string,
     body: RuleModel["updateBody"],
+    actorId: string,
   ): ResultAsync<
     RuleModel["rule"],
     | RuleError.NotFound
@@ -198,23 +208,26 @@ export abstract class Rule {
       .andThen((rule) => {
         const type = body.type ?? rule.type;
         return parsePattern(type, body.pattern ?? rule.pattern).map(
-          (pattern) => ({ list: body.list ?? rule.list, type, pattern }),
+          (pattern) => ({
+            before: rule,
+            next: { list: body.list ?? rule.list, type, pattern },
+          }),
         );
       })
-      .andThen((next) =>
+      .andThen((change) =>
         dbQuery(() =>
           db.query.rules.findFirst({
             where: and(
-              eq(rules.list, next.list),
-              eq(rules.type, next.type),
-              eq(rules.pattern, next.pattern),
+              eq(rules.list, change.next.list),
+              eq(rules.type, change.next.type),
+              eq(rules.pattern, change.next.pattern),
               ne(rules.id, id),
             ),
             columns: { id: true },
           }),
-        ).andThen((clash) => (clash ? err(RuleError.Duplicate) : ok(next))),
+        ).andThen((clash) => (clash ? err(RuleError.Duplicate) : ok(change))),
       )
-      .andThen((next) =>
+      .andThen(({ before, next }) =>
         dbQuery(() =>
           db.batch([
             db
@@ -222,6 +235,13 @@ export abstract class Rule {
               .set({ ...next, updatedAt: new Date() })
               .where(eq(rules.id, id))
               .returning(),
+            Audit.afterWrite(db, {
+              actorId,
+              action: "rule.update",
+              targetType: "rule",
+              targetId: id,
+              details: changes(before, next),
+            }),
             bumpVersion(db),
           ]),
         ),
@@ -234,14 +254,35 @@ export abstract class Rule {
   static delete(
     db: DB,
     id: string,
+    actorId: string,
   ): ResultAsync<void, RuleError.NotFound | InternalError.Database> {
     return dbQuery(() =>
-      db.batch([
-        db.delete(rules).where(eq(rules.id, id)).returning({ id: rules.id }),
-        bumpVersion(db),
-      ]),
-    ).andThen(([deleted]) =>
-      deleted.length > 0 ? ok(undefined) : err(RuleError.NotFound),
-    );
+      db.query.rules.findFirst({
+        where: eq(rules.id, id),
+        columns: { list: true, type: true, pattern: true },
+      }),
+    )
+      .andThen((rule) => (rule ? ok(rule) : err(RuleError.NotFound)))
+      .andThen((rule) =>
+        dbQuery(() =>
+          db.batch([
+            db
+              .delete(rules)
+              .where(eq(rules.id, id))
+              .returning({ id: rules.id }),
+            Audit.afterWrite(db, {
+              actorId,
+              action: "rule.delete",
+              targetType: "rule",
+              targetId: id,
+              details: rule,
+            }),
+            bumpVersion(db),
+          ]),
+        ),
+      )
+      .andThen(([deleted]) =>
+        deleted.length > 0 ? ok(undefined) : err(RuleError.NotFound),
+      );
   }
 }
