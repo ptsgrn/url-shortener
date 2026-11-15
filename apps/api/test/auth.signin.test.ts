@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { emailAllowed, parseDomains } from "../src/modules/auth/policy.ts";
+import { google } from "../src/modules/auth/providers/google.ts";
 import {
   providers,
   type OAuthProfile,
@@ -32,7 +33,8 @@ const signIn = async (h: Harness, as: OAuthProfile) => {
   const jar = start.headers.getSetCookie().map((c) => c.split(";")[0]!);
   const state = jar.find((c) => c.startsWith("oauth_state="))!.split("=")[1]!;
   const res = await h.request("GET", "/v1/auth/fake/callback", {
-    query: { code: "code", state },
+    // Extra params like the ones Google appends must not fail validation.
+    query: { code: "code", state, iss: "https://idp.example", authuser: "1" },
     headers: { cookie: jar.join("; ") },
   });
   const session = res.headers
@@ -51,6 +53,31 @@ const person = (
 
 const usersNamed = (h: Harness, email: string) =>
   h.db.query.users.findMany({ where: (u, { eq }) => eq(u.email, email) });
+
+describe("google hd hint", () => {
+  const hdFor = (ALLOWED_EMAIL_DOMAINS?: string) =>
+    google(
+      {
+        JWT_SECRET: "s",
+        GOOGLE_CLIENT_ID: "id",
+        GOOGLE_CLIENT_SECRET: "secret",
+        ALLOWED_EMAIL_DOMAINS,
+      },
+      "https://app.example/callback",
+    )
+      .createAuthorizationURL("state", "verifier")
+      .searchParams.get("hd");
+
+  test("the first allowed domain is sent as hd", () => {
+    expect(hdFor(" Uni.Example ")).toBe("uni.example");
+    expect(hdFor("uni.example,staff.example")).toBe("uni.example");
+  });
+
+  test("no domains send no hd", () => {
+    expect(hdFor(undefined)).toBeNull();
+    expect(hdFor("")).toBeNull();
+  });
+});
 
 describe("policy", () => {
   test("parseDomains trims, lowercases and drops empties and @", () => {

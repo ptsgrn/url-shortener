@@ -7,6 +7,7 @@ GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 # Optional: only these email domains may sign in (comma-separated, exact
 # domains; the provider must have verified the email). Unset: anyone.
+# Google's account chooser is hinted to the first one (`hd`).
 # ALLOWED_EMAIL_DOMAINS=example.ac.th,student.example.ac.th
 # Enables /api/dev (sign in as any user). Local only: uncomment in your
 # .dev.vars, never set it in production.

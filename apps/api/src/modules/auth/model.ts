@@ -44,10 +44,15 @@ export type RefreshError =
 export const AuthModel = {
   providerParams: t.Object({ provider: t.String() }),
   signInQuery: t.Object({ redirectTo: t.Optional(t.String()) }),
-  callbackQuery: t.Object({
-    code: t.Optional(t.String()),
-    state: t.Optional(t.String()),
-  }),
+  // Providers append their own params (Google: iss, scope, authuser, hd,
+  // prompt), so anything besides code and state is allowed and ignored.
+  callbackQuery: t.Object(
+    {
+      code: t.Optional(t.String()),
+      state: t.Optional(t.String()),
+    },
+    { additionalProperties: true },
+  ),
   ok: t.Object({ ok: t.Literal(true) }),
   unauthorized: errorBody(AuthError.Unauthorized),
   forbidden: errorBody(AuthError.Forbidden),
