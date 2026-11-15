@@ -100,6 +100,16 @@ bun test
 
 For writing tests, you can use the `bun test --watch` command to run tests in watch mode. This will automatically rerun the tests whenever you make changes to the code. More information on testing can be found in the [bun documentation](https://bun.sh/docs/cli/test).
 
+#### End-to-end tests
+
+The web app has [Playwright](https://playwright.dev) tests in `apps/web/e2e` (`*.e2e.ts`) covering sign-in, creating links and the public pages. They start their own dev server on port 3100 and sign in through the [dev sign-in endpoints](#signing-in-without-google), so `apps/web/.dev.vars` needs `JWT_SECRET` and `DEV_TOOLS=true`.
+
+```bash
+cd apps/web
+bunx playwright install chromium # once
+bun run test:e2e
+```
+
 ## Deployment
 
 Production runs on Cloudflare Workers, built and deployed by [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/) on every push. The repository holds no account state: `apps/web/wrangler.jsonc` names the D1 database (`url-shortener`) but has no database ID. The first deploy creates the database and links it to the Worker, and later deploys stay linked. Secrets live in Cloudflare, never in the repository.
