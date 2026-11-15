@@ -8,7 +8,12 @@ import { AuthError, type RefreshError } from "./model.ts";
 import { refreshTokens } from "./schema.ts";
 
 export const ACCESS_TOKEN_TTL = 15 * 60; // seconds
-export const REFRESH_TOKEN_TTL = 30 * 24 * 60 * 60; // seconds
+/**
+ * FR-02: a session ends after 7 days without use. Every refresh rotates the
+ * token and starts a new 7-day window, so this is an inactivity limit, not a
+ * maximum session length.
+ */
+export const REFRESH_TOKEN_TTL = 7 * 24 * 60 * 60; // seconds
 
 const key = (secret: string) => new TextEncoder().encode(secret);
 const hash = (token: string) => cryptoOp(() => sha256Hex(token));
@@ -104,7 +109,12 @@ export abstract class Token {
         );
         return err(AuthError.RefreshTokenReused);
       }
-      if (row.expiresAt.getTime() <= Date.now())
+      // Also by age: tokens issued before the TTL was shortened still carry
+      // their longer `expiresAt`.
+      if (
+        row.expiresAt.getTime() <= Date.now() ||
+        row.createdAt.getTime() + REFRESH_TOKEN_TTL * 1000 <= Date.now()
+      )
         return err(AuthError.RefreshTokenExpired);
 
       // Revoke first, conditioned on still being active, so two concurrent
