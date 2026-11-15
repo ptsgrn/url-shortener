@@ -116,6 +116,7 @@ export const auth = (deps: Deps) =>
         query: AuthModel.callbackQuery,
         response: {
           400: AuthModel.signInFailed,
+          403: AuthModel.signInRefused,
           404: AuthModel.unknownProvider,
           500: internalErrorBody,
         },
