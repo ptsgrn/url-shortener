@@ -12,12 +12,17 @@
 	let error = $state<string | null>(null);
 
 	const shortenErrors: Record<
-		AuthError.Unauthorized | AuthError.Forbidden | LinkError.Blocked | InternalError,
+		| AuthError.Unauthorized
+		| AuthError.Forbidden
+		| LinkError.Blocked
+		| LinkError.CodeTaken
+		| InternalError,
 		string
 	> = {
 		[AuthError.Unauthorized]: 'Your session expired. Sign in again.',
 		[AuthError.Forbidden]: 'Your account is suspended, so you can’t create links.',
 		[LinkError.Blocked]: 'Links to this website aren’t allowed.',
+		[LinkError.CodeTaken]: 'That short name is taken. Try another.',
 		[InternalError.Database]: 'Something went wrong on our side. Try again.',
 		[InternalError.Crypto]: 'Something went wrong on our side. Try again.'
 	};

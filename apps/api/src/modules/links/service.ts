@@ -5,6 +5,7 @@ import { dbQuery, InternalError } from "../../utils/error.ts";
 import { Rule } from "../rules/service.ts";
 import { LinkError, type LinkModel } from "./model.ts";
 import { randomCode } from "./random.ts";
+import { isReservedCode } from "./reserved.ts";
 import type { Role } from "../users/service.ts";
 import { users } from "../users/schema.ts";
 import { links } from "./schema.ts";
@@ -94,23 +95,30 @@ export interface Actor {
 }
 
 export abstract class Link {
+  /**
+   * Creates a link to `url` with the chosen `code`, or a random one. A random
+   * code that's taken is redrawn; a chosen one that's taken (by any link,
+   * even a deleted one) or reserved is `CodeTaken`. The code's uniqueness is
+   * enforced by the database, so of concurrent creates with one code exactly
+   * one wins. A refused destination reserves nothing.
+   */
   static create(
     db: DB,
-    { url }: LinkModel["createBody"],
+    { url, code }: LinkModel["createBody"],
     userId: string,
   ): ResultAsync<
     LinkModel["link"],
-    LinkError.Blocked | InternalError.Database
+    LinkError.Blocked | LinkError.CodeTaken | InternalError.Database
   > {
-    // Insert with a random code; on a `code` unique conflict nothing is
-    // inserted (no row returned), so retry with a new code.
-    const attempt = (
-      left: number,
-    ): ResultAsync<LinkModel["link"], InternalError.Database> =>
+    if (code !== undefined && isReservedCode(code))
+      return errAsync(LinkError.CodeTaken as const);
+
+    // Insert; on a `code` unique conflict nothing is inserted (no row returned).
+    const insert = (candidate: string) =>
       dbQuery(() =>
         db
           .insert(links)
-          .values({ code: randomCode(), url, userId })
+          .values({ code: candidate, url, userId })
           .onConflictDoNothing({ target: links.code })
           .returning({
             code: links.code,
@@ -121,19 +129,31 @@ export abstract class Link {
             bannedReason: links.bannedReason,
           })
           .get(),
-      ).andThen((link) => {
-        if (link) return okAsync({ ...link, blocked: false });
-        if (left > 1) return attempt(left - 1);
+      ).map((link) => link && { ...link, blocked: false });
+
+    const random = (
+      left: number,
+    ): ResultAsync<LinkModel["link"], InternalError.Database> =>
+      insert(randomCode()).andThen((link) => {
+        if (link) return okAsync(link);
+        if (left > 1) return random(left - 1);
         console.error(
           `[${InternalError.Database}] no free link code after ${MAX_CODE_ATTEMPTS} attempts`,
         );
         return errAsync(InternalError.Database as const);
       });
 
+    const chosen = (code: string) =>
+      insert(code).andThen((link) =>
+        link ? ok(link) : err(LinkError.CodeTaken as const),
+      );
+
     return Rule.check(db, url).andThen((verdict) =>
       verdict !== "allowed"
         ? errAsync(LinkError.Blocked as const)
-        : attempt(MAX_CODE_ATTEMPTS),
+        : code === undefined
+          ? random(MAX_CODE_ATTEMPTS)
+          : chosen(code),
     );
   }
 

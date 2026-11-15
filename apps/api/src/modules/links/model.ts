@@ -13,6 +13,11 @@ export enum LinkError {
   OwnerNotFound = "LINK_OWNER_NOT_FOUND",
   /** Only admins can change a link's owner. */
   OwnerChangeForbidden = "LINK_OWNER_CHANGE_FORBIDDEN",
+  /**
+   * The chosen code is used by another link (active, disabled, suspended or
+   * deleted: codes are never reused) or is reserved for the site's own pages.
+   */
+  CodeTaken = "LINK_CODE_TAKEN",
 }
 
 export const LinkErrorStatus = {
@@ -22,6 +27,7 @@ export const LinkErrorStatus = {
   [LinkError.Banned]: 403,
   [LinkError.OwnerNotFound]: 422,
   [LinkError.OwnerChangeForbidden]: 403,
+  [LinkError.CodeTaken]: 409,
 } as const satisfies Record<LinkError, number>;
 
 /**
@@ -56,8 +62,27 @@ const linkStatus = t.Union([
   t.Literal("blocked"),
 ]);
 
+/** Characters a chosen code may use (FR-05): letters, digits, `-`, `+`, `_`. */
+export const CODE_PATTERN = "^[A-Za-z0-9+_-]+$";
+export const CODE_MIN_LENGTH = 3;
+export const CODE_MAX_LENGTH = 32;
+
 export const LinkModel = {
-  createBody: t.Object({ url: destination }),
+  createBody: t.Object({
+    url: destination,
+    /**
+     * The short code to use, case-sensitive; random if omitted. Refused if
+     * any link ever had it, or it is reserved (`LINK_CODE_TAKEN`).
+     */
+    code: t.Optional(
+      t.String({
+        pattern: CODE_PATTERN,
+        minLength: CODE_MIN_LENGTH,
+        maxLength: CODE_MAX_LENGTH,
+        examples: ["eng-open-house"],
+      }),
+    ),
+  }),
   /**
    * Fields to change; at least one. The code can't change (it is the short
    * link and its QR code).
@@ -98,6 +123,7 @@ export const LinkModel = {
   id: t.Object({ id: t.String() }),
   notFound: errorBody(LinkError.NotFound),
   blocked: errorBody(LinkError.Blocked),
+  codeTaken: errorBody(LinkError.CodeTaken),
   /** Why an update was refused (403). */
   updateForbidden: errorBody(
     LinkError.Blocked,

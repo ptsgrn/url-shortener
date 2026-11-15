@@ -16,7 +16,7 @@ import type { Harness, TestResponse, TestUser } from "./harness.ts";
 export const SHORT_ORIGIN = "https://chula.me";
 
 /** Path segments the web app serves; a custom code must never take one (FR-05). */
-export const SYSTEM_PATHS = ["api", "login", "_app"];
+export const SYSTEM_PATHS = ["api", "login", "_app", "API", "Login"];
 
 export const LinkErrors = {
   NotFound: "LINK_NOT_FOUND",
@@ -24,8 +24,6 @@ export const LinkErrors = {
   Blocked: "LINK_BLOCKED",
   /** FR-05: custom code already used (active, disabled, banned or deleted) or reserved. */
   CodeTaken: "LINK_CODE_TAKEN",
-  /** FR-05: custom code has an invalid format. */
-  CodeInvalid: "LINK_CODE_INVALID",
   /** FR-07/08: suspended by an admin, so the owner can't edit or re-enable it. */
   Banned: "LINK_BANNED",
   /** Only admins can change a link's owner. */

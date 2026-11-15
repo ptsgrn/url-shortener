@@ -30,12 +30,19 @@ export const links = (deps: Deps) =>
         Link.create(deps.db, body, user.id).match((link) => link, fail(status)),
       {
         guardRole: "user",
-        detail: { summary: "Create a short link" },
+        detail: {
+          summary: "Create a short link",
+          description: [
+            "`url` must be HTTPS and pass the domain rules (`LINK_BLOCKED` otherwise).",
+            "`code` (optional) picks the short code: 3–32 of `A–Z a–z 0–9 - + _`, case-sensitive. It is refused with `LINK_CODE_TAKEN` if any link ever used it (deleted links keep theirs) or it names one of the site's own pages. Without it, a random 7-character code is used.",
+          ].join("\n\n"),
+        },
         body: LinkModel.createBody,
         response: {
           200: LinkModel.link,
           401: AuthModel.unauthorized,
           403: t.Union([AuthModel.forbidden, LinkModel.blocked]),
+          409: LinkModel.codeTaken,
           500: internalErrorBody,
         },
       },
