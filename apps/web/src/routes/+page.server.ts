@@ -1,7 +1,6 @@
-import { api } from '#lib/server/api.ts';
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
-	const { data } = await api.health.get();
-	return { health: data };
+export const load: PageServerLoad = ({ locals, url }) => {
+	if (!locals.user) redirect(303, `/login?redirectTo=${encodeURIComponent(url.pathname)}`);
 };
