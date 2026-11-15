@@ -12,6 +12,8 @@ const publicColumns = {
   email: true,
   name: true,
   avatarUrl: true,
+  role: true,
+  bannedAt: true,
 } as const;
 
 /** Soft-deleted accounts are gone: they can't sign in or be authorized. */
@@ -30,7 +32,15 @@ export abstract class User {
         where: active(id),
         columns: publicColumns,
       }),
-    ).andThen((user) => (user ? ok(user) : err(UserError.NotFound)));
+    ).andThen((user) => {
+      if (!user) return err(UserError.NotFound);
+      const { bannedAt, role, ...profile } = user;
+      return ok({
+        ...profile,
+        role: role ?? "user",
+        suspended: bannedAt !== null,
+      });
+    });
   }
 
   /** The user's role and ban state, for authorization; a deleted account is `NotFound`. */
