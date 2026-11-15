@@ -7,6 +7,11 @@ export interface AuthEnv {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   DEV_TOOLS?: string;
+  /**
+   * Comma-separated email domains allowed to sign in (FR-01), e.g.
+   * `example.ac.th,student.example.ac.th`. Unset or empty: anyone.
+   */
+  ALLOWED_EMAIL_DOMAINS?: string;
 }
 
 /** Everything the app depends on, injected through `createApp(deps)`. */
