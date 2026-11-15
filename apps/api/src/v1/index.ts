@@ -1,4 +1,5 @@
 import { Elysia } from "elysia";
+import { admin } from "../modules/admin/index.ts";
 import { auth } from "../modules/auth/index.ts";
 import { links } from "../modules/links/index.ts";
 import { redirect } from "../modules/links/redirect.ts";
@@ -13,4 +14,5 @@ export const v1 = (deps: Deps) =>
     .use(links(deps))
     .use(rules(deps))
     .use(stats(deps))
-    .use(redirect(deps));
+    .use(redirect(deps))
+    .use(admin(deps));
