@@ -38,6 +38,10 @@
     "db:studio": {
       "cache": false,
       "persistent": true
+    },
+    "gen": {
+      "cache": false,
+      "persistent": false
     }
   }
 }
