@@ -51,7 +51,8 @@ export abstract class Stats {
   /**
    * Visit stats for the owner's link `code` (FR-11), over inclusive calendar
    * days `from`..`to` in time zone `tz` (default UTC; either day may be
-   * omitted). Someone else's or a deleted link is `NotFound`.
+   * omitted). Owners see their own links; admins any link (FR-03). Someone
+   * else's (for a non-admin) or a deleted link is `NotFound`.
    *
    * Days per time zone: `from`/`to` become UTC instants (the start of each
    * local day), and visits are counted per 15-minute UTC bucket in SQL, then
@@ -62,7 +63,7 @@ export abstract class Stats {
   static summary(
     db: DB,
     code: string,
-    userId: string,
+    actor: { id: string; role: "user" | "admin" },
     { from, to, tz }: StatsModel["query"],
   ): ResultAsync<
     StatsModel["summary"],
@@ -84,7 +85,7 @@ export abstract class Stats {
       db.query.links.findFirst({
         where: and(
           eq(links.code, code),
-          eq(links.userId, userId),
+          actor.role === "admin" ? undefined : eq(links.userId, actor.id),
           isNull(links.deletedAt),
         ),
         columns: { id: true },
