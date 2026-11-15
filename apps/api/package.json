@@ -29,7 +29,8 @@
     "jose": "^6.2.17",
     "nanoid": "^6.0.2",
     "neverthrow": "^8.2.0",
-    "re2js": "2.9.1"
+    "re2js": "2.9.1",
+    "ua-parser-js": "1.0.41"
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.1",
@@ -37,6 +38,7 @@
     "@repo/eslint-config": "*",
     "@repo/typescript-config": "*",
     "@types/bun": "^1.4.4",
+    "@types/ua-parser-js": "^0.7.39",
     "drizzle-kit": "^0.31.11",
     "eslint": "10.9.1",
     "eslint-plugin-neverthrow": "^1.1.4",
