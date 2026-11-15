@@ -1,6 +1,5 @@
 <script lang="ts">
-	// Dev-only sign-in against /api/dev (see the API's dev module). Those routes
-	// are left out of the typed client, so this uses plain fetch.
+	// /api/dev is left out of the typed client, so plain fetch.
 	import { onMount } from 'svelte';
 
 	type Role = 'user' | 'admin';

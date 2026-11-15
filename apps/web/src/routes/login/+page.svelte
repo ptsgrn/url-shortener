@@ -15,7 +15,6 @@
 	>Sign in with Google</a
 >
 
-<!-- `dev` is a build-time constant, so production builds drop the dev panel's chunk. -->
 {#if dev && data.devTools}
 	{#await import('./DevLogin.svelte') then { default: DevLogin }}
 		<DevLogin {redirectTo} />
