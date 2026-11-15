@@ -1,0 +1,9 @@
+// Bindings for the test harness only (see test/harness.ts): an in-memory D1.
+{
+  "name": "api-test",
+  "compatibility_date": "2026-11-14",
+  "compatibility_flags": ["nodejs_als"],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "test", "database_id": "test" },
+  ],
+}
