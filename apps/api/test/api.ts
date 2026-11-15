@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { links } from "../src/modules/links/schema.ts";
+import { bangkokDay } from "../src/modules/stats/parse.ts";
 import { users } from "../src/modules/users/schema.ts";
 import { expect } from "bun:test";
 import type { Harness, TestResponse, TestUser } from "./harness.ts";
@@ -27,6 +28,10 @@ export const LinkErrors = {
   CodeInvalid: "LINK_CODE_INVALID",
   /** FR-07/08: suspended by an admin, so the owner can't edit or re-enable it. */
   Banned: "LINK_BANNED",
+  /** Only admins can change a link's owner. */
+  OwnerChangeForbidden: "LINK_OWNER_CHANGE_FORBIDDEN",
+  /** `userId` names no existing user. */
+  OwnerNotFound: "LINK_OWNER_NOT_FOUND",
 } as const;
 
 /** Proposed `status` on the owner's views (FR-06, FR-08). */
@@ -39,11 +44,11 @@ export const linkApi = (h: Harness) => ({
   /** FR-06: owner-only details. */
   details: (code: string, as?: TestUser) =>
     h.request("GET", `/v1/links/${code}/details`, { as }),
-  /** FR-07 (`url`) and FR-08 (`active`). */
+  /** FR-07 (`url`), FR-08 (`active`); admins also `userId`. */
   update: (
     code: string,
     as: TestUser | undefined,
-    body: { url?: string; active?: boolean; code?: string },
+    body: { url?: string; active?: boolean; userId?: string; code?: string },
   ) => h.request("PATCH", `/v1/links/${code}`, { as, body }),
   /** FR-10 */
   qr: (code: string, as?: TestUser) =>
@@ -54,7 +59,7 @@ export const linkApi = (h: Harness) => ({
     as?: TestUser,
     range: { from?: string; to?: string } = {},
   ) =>
-    h.request("GET", `/v1/links/${code}/stats`, {
+    h.request("GET", `/v1/stats/${code}`, {
       as,
       query: Object.fromEntries(
         Object.entries(range).filter(([, v]) => v !== undefined),
@@ -120,5 +125,5 @@ export const findStored = async (
   return hits;
 };
 
-/** Today in UTC, `YYYY-MM-DD`. */
-export const today = () => new Date().toISOString().slice(0, 10);
+/** Today in Asia/Bangkok (stats days), `YYYY-MM-DD`. */
+export const today = () => bangkokDay(new Date());

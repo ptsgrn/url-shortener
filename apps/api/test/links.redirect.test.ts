@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { banLink, banUser, isRedirect, linkApi } from "./api.ts";
-import { addRule, createLink, useSuite } from "./fixtures.ts";
+import { addRule, allowAll, createLink, useSuite } from "./fixtures.ts";
+import { createHarness } from "./harness.ts";
 
 /**
  * FR-09: anyone opens https://chula.me/{code} (or scans its QR) without
@@ -33,7 +34,7 @@ const expectNoRedirect = async (code: string, status?: number) => {
 };
 
 describe("FR-09: opening a short link", () => {
-  test.todo("redirects a signed-out visitor to the destination", async () => {
+  test("redirects a signed-out visitor to the destination", async () => {
     const { code } = await createLink(
       t.h,
       t.owner,
@@ -42,114 +43,109 @@ describe("FR-09: opening a short link", () => {
     await expectRedirectTo(code, "https://example.com/a?b=c#d");
   });
 
-  test.todo(
-    "uses a temporary redirect, so edits and rule changes take effect",
-    async () => {
-      // 301/308 are cached by browsers and would bypass FR-04/FR-08 checks.
-      const { code } = await createLink(t.h, t.owner, "https://example.com");
-      expect([302, 307]).toContain((await api().visit(code)).status);
-    },
-  );
+  test("uses a temporary redirect, so edits and rule changes take effect", async () => {
+    // 301/308 are cached by browsers and would bypass FR-04/FR-08 checks.
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    expect([302, 307]).toContain((await api().visit(code)).status);
+  });
 
-  test.todo(
-    "follows the current destination after an edit (FR-07)",
-    async () => {
-      const { code } = await createLink(
-        t.h,
-        t.owner,
-        "https://example.com/old",
-      );
-      await api().update(code, t.owner, { url: "https://example.com/new" });
-      await expectRedirectTo(code, "https://example.com/new");
-    },
-  );
+  test("follows the current destination after an edit (FR-07)", async () => {
+    const { code } = await createLink(t.h, t.owner, "https://example.com/old");
+    await api().update(code, t.owner, { url: "https://example.com/new" });
+    await expectRedirectTo(code, "https://example.com/new");
+  });
 
-  test.todo("an unknown code shows a 404 status page", async () => {
+  test("an unknown code shows a 404 status page", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");
     await redirectsNow(code); // control
     await expectNoRedirect("nope123", 404);
   });
 
-  test.todo("a disabled link doesn't redirect (FR-08)", async () => {
+  test("a disabled link doesn't redirect (FR-08)", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");
     await redirectsNow(code);
     await api().update(code, t.owner, { active: false });
     await expectNoRedirect(code);
   });
 
-  test.todo("a deleted link doesn't redirect (FR-08)", async () => {
+  test("a deleted link doesn't redirect (FR-08)", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");
     await redirectsNow(code);
     await t.h.request("DELETE", `/v1/links/${code}`, { as: t.owner });
     await expectNoRedirect(code);
   });
 
-  test.todo("an admin-suspended link doesn't redirect (FR-13)", async () => {
+  test("an admin-suspended link doesn't redirect (FR-13)", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");
     await redirectsNow(code);
     await banLink(t.h, code);
     await expectNoRedirect(code);
   });
 
-  test.todo("a suspended owner's links don't redirect (FR-15)", async () => {
+  test("a suspended owner's links don't redirect (FR-15)", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");
     await redirectsNow(code);
     await banUser(t.h, t.owner.id);
     await expectNoRedirect(code);
   });
 
-  test.todo(
-    "a destination now blacklisted doesn't redirect (FR-04, FR-14)",
-    async () => {
-      const { code } = await createLink(t.h, t.owner, "https://later.com");
-      await redirectsNow(code);
-      await addRule(t.h, t.admin, "blacklist", "later.com");
-      await expectNoRedirect(code);
-    },
-  );
+  test("a destination now blacklisted doesn't redirect (FR-04, FR-14)", async () => {
+    const { code } = await createLink(t.h, t.owner, "https://later.com");
+    await redirectsNow(code);
+    await addRule(t.h, t.admin, "blacklist", "later.com");
+    await expectNoRedirect(code);
+  });
 
-  test.todo(
-    "a destination no longer whitelisted doesn't redirect",
-    async () => {
-      await t.h.reset();
-      const owner = await t.h.signIn();
-      const admin = await t.h.signIn({ role: "admin" });
-      const white = await addRule(t.h, admin, "whitelist", "example.com");
-      const { code } = await createLink(t.h, owner, "https://example.com");
-      await redirectsNow(code);
-      await t.h.request("DELETE", `/v1/rules/${white}`, { as: admin });
-      await expectNoRedirect(code);
-    },
-  );
+  test("a destination no longer whitelisted doesn't redirect", async () => {
+    await t.h.reset();
+    const owner = await t.h.signIn();
+    const admin = await t.h.signIn({ role: "admin" });
+    const white = await addRule(t.h, admin, "whitelist", "example.com");
+    const { code } = await createLink(t.h, owner, "https://example.com");
+    await redirectsNow(code);
+    await t.h.request("DELETE", `/v1/rules/${white}`, { as: admin });
+    await expectNoRedirect(code);
+  });
 
-  test.todo(
-    "the status page says why, without leaking the destination",
-    async () => {
-      const { code } = await createLink(
-        t.h,
-        t.owner,
-        "https://example.com/private",
-      );
-      await redirectsNow(code);
-      await banLink(t.h, code);
-      const res = await expectNoRedirect(code);
-      expect(JSON.stringify(res.body ?? "")).not.toContain(
-        "example.com/private",
-      );
-    },
-  );
+  test("the status page says why, without leaking the destination", async () => {
+    const { code } = await createLink(
+      t.h,
+      t.owner,
+      "https://example.com/private",
+    );
+    await redirectsNow(code);
+    await banLink(t.h, code);
+    const res = await expectNoRedirect(code);
+    expect(JSON.stringify(res.body ?? "")).not.toContain("example.com/private");
+  });
 
-  test.todo(
-    "FR-02: opening a link doesn't refresh the visitor's session",
-    async () => {
-      const { code } = await createLink(t.h, t.owner, "https://example.com");
-      await redirectsNow(code);
-      const res = await t.h.request("GET", `/v1/r/${code}`, {
-        as: t.owner,
-      });
-      expect(res.headers.get("set-cookie")).toBeNull();
-    },
-  );
+  test("FR-02: opening a link doesn't refresh the visitor's session", async () => {
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    await redirectsNow(code);
+    const res = await t.h.request("GET", `/v1/r/${code}`, {
+      as: t.owner,
+    });
+    expect(res.headers.get("set-cookie")).toBeNull();
+  });
+
+  test("on Workers the visit is recorded after the response (waitUntil)", async () => {
+    const tasks: { request: Request; task: Promise<unknown> }[] = [];
+    const h = await createHarness({
+      waitUntil: (request, task) => tasks.push({ request, task }),
+    });
+    const owner = await h.signIn();
+    await allowAll(h, await h.signIn({ role: "admin" }));
+    const { code } = await createLink(h, owner, "https://example.com");
+
+    const res = await h.request("GET", `/v1/r/${code}`);
+    expect(res.status).toBe(302);
+    expect(tasks).toHaveLength(1);
+    expect(new URL(tasks[0]!.request.url).pathname).toBe(`/api/v1/r/${code}`);
+
+    await Promise.all(tasks.map((t) => t.task));
+    const stats = await h.request("GET", `/v1/stats/${code}`, { as: owner });
+    expect(stats.body.total).toBe(1);
+  });
 
   test.todo(
     "a failure recording the visit (FR-11) still redirects (needs an injectable visit recorder)",

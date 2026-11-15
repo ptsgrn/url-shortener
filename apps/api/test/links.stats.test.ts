@@ -19,7 +19,7 @@ const SAFARI_IPHONE =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 
 describe("FR-11: visit stats", () => {
-  test.todo("counts every redirect, repeats included", async () => {
+  test("counts every redirect, repeats included", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");
     for (let i = 0; i < 3; i++) await api().visit(code);
     const res = await api().stats(code, t.owner);
@@ -28,30 +28,24 @@ describe("FR-11: visit stats", () => {
     expect(res.body.daily).toEqual([{ date: today(), count: 3 }]);
   });
 
-  test.todo(
-    "doesn't count visits that weren't redirected (FR-09)",
-    async () => {
-      const { code } = await createLink(t.h, t.owner, "https://example.com");
-      await api().visit(code);
-      await banLink(t.h, code);
-      await api().visit(code);
-      await api().visit(code);
-      expect((await ok(api().stats(code, t.owner))).total).toBe(1);
-    },
-  );
+  test("doesn't count visits that weren't redirected (FR-09)", async () => {
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    await api().visit(code);
+    await banLink(t.h, code);
+    await api().visit(code);
+    await api().visit(code);
+    expect((await ok(api().stats(code, t.owner))).total).toBe(1);
+  });
 
-  test.todo(
-    "doesn't count the owner's own lookups, details or list views",
-    async () => {
-      const { code } = await createLink(t.h, t.owner, "https://example.com");
-      await t.h.request("GET", `/v1/links/${code}`);
-      await api().details(code, t.owner);
-      await t.h.request("GET", "/v1/links", { as: t.owner });
-      expect((await ok(api().stats(code, t.owner))).total).toBe(0);
-    },
-  );
+  test("doesn't count the owner's own lookups, details or list views", async () => {
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    await t.h.request("GET", `/v1/links/${code}`);
+    await api().details(code, t.owner);
+    await t.h.request("GET", "/v1/links", { as: t.owner });
+    expect((await ok(api().stats(code, t.owner))).total).toBe(0);
+  });
 
-  test.todo("breaks visits down by browser and device", async () => {
+  test("breaks visits down by browser and device", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");
     await api().visit(code, { "user-agent": CHROME_DESKTOP });
     await api().visit(code, { "user-agent": CHROME_DESKTOP });
@@ -62,33 +56,27 @@ describe("FR-11: visit stats", () => {
     expect(counts(body.devices)).toEqual([1, 2]);
   });
 
-  test.todo(
-    "puts a missing or unrecognized user agent under unknown",
-    async () => {
-      const { code } = await createLink(t.h, t.owner, "https://example.com");
-      await api().visit(code);
-      await api().visit(code, { "user-agent": "curl-ish/0.0" });
-      const body = await ok(api().stats(code, t.owner));
-      expect(body.browsers.unknown).toBe(2);
-      expect(body.devices.unknown).toBe(2);
-    },
-  );
+  test("puts a missing or unrecognized user agent under unknown", async () => {
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    await api().visit(code);
+    await api().visit(code, { "user-agent": "curl-ish/0.0" });
+    const body = await ok(api().stats(code, t.owner));
+    expect(body.browsers.unknown).toBe(2);
+    expect(body.devices.unknown).toBe(2);
+  });
 
-  test.todo(
-    "groups referrers by domain only; no referrer is unknown",
-    async () => {
-      const { code } = await createLink(t.h, t.owner, "https://example.com");
-      await api().visit(code, {
-        referer: "https://www.google.com/search?q=private+query",
-      });
-      await api().visit(code, { referer: "https://www.google.com/other" });
-      await api().visit(code);
-      const body = await ok(api().stats(code, t.owner));
-      expect(body.referrers).toEqual({ "www.google.com": 2, unknown: 1 });
-    },
-  );
+  test("groups referrers by domain only; no referrer is unknown", async () => {
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    await api().visit(code, {
+      referer: "https://www.google.com/search?q=private+query",
+    });
+    await api().visit(code, { referer: "https://www.google.com/other" });
+    await api().visit(code);
+    const body = await ok(api().stats(code, t.owner));
+    expect(body.referrers).toEqual({ "www.google.com": 2, unknown: 1 });
+  });
 
-  test.todo("stores no full referrer URL and no visitor IP", async () => {
+  test("stores no full referrer URL and no visitor IP", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");
     await api().visit(code, {
       referer: "https://www.google.com/search?q=private+query",
@@ -102,7 +90,7 @@ describe("FR-11: visit stats", () => {
     expect(await findStored(t.h, "203.0.113.77")).toEqual([]);
   });
 
-  test.todo("filters by an inclusive date range", async () => {
+  test("filters by an inclusive date range", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");
     await api().visit(code);
     const inRange = await api().stats(code, t.owner, {
@@ -118,7 +106,7 @@ describe("FR-11: visit stats", () => {
     expect(before.body.daily).toEqual([]);
   });
 
-  test.todo("rejects a range that ends before it starts", async () => {
+  test("rejects a range that ends before it starts", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");
     const res = await api().stats(code, t.owner, {
       from: "2026-02-01",
@@ -127,7 +115,7 @@ describe("FR-11: visit stats", () => {
     expect([400, 422]).toContain(res.status);
   });
 
-  test.todo("a new link starts with empty stats", async () => {
+  test("a new link starts with empty stats", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");
     expect(await ok(api().stats(code, t.owner))).toEqual({
       total: 0,
@@ -138,7 +126,7 @@ describe("FR-11: visit stats", () => {
     });
   });
 
-  test.todo("only the owner sees them", async () => {
+  test("only the owner sees them", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");
     expect((await api().stats(code, t.other)).status).toBe(404);
     expect((await api().stats(code)).status).toBe(401);

@@ -67,22 +67,37 @@ export interface Harness {
   }): Promise<TestUser>;
   /** Empties every table between tests (and invalidates cached regex rules). */
   reset(): Promise<void>;
+  /** No-op: the shared Miniflare instance lives until the test process exits. */
   dispose(): Promise<void>;
 }
 
 /**
- * Boots the real app (`createApp`) on a fresh in-memory D1 database with all
- * migrations applied. One per test file; call `dispose()` in `afterAll`.
+ * One Miniflare instance (in-memory D1, all migrations applied) for the whole
+ * `bun test` process. Booting and disposing one per file left later files'
+ * D1 calls ~100x slower and sometimes hung `dispose()` past the hook timeout.
  */
-export const createHarness = async (): Promise<Harness> => {
-  const proxy = await getPlatformProxy<{ DB: D1Database }>({
+let platform: Promise<D1Database> | undefined;
+const sharedD1 = () =>
+  (platform ??= getPlatformProxy<{ DB: D1Database }>({
     configPath: join(import.meta.dir, "wrangler.jsonc"),
     persist: false,
-  });
-  await migrate(proxy.env.DB);
+  }).then(async (proxy) => {
+    process.once("beforeExit", () => void proxy.dispose());
+    await migrate(proxy.env.DB);
+    return proxy.env.DB;
+  }));
 
-  const db = createDb(proxy.env.DB);
+/**
+ * The real app (`createApp`) on the shared, emptied D1 database. Each call
+ * builds a fresh app, so module mocks registered before it apply (see
+ * `links.collision.test.ts`). Files run one at a time, so sharing is safe.
+ */
+export const createHarness = async (
+  overrides: Pick<Deps, "waitUntil"> = {},
+): Promise<Harness> => {
+  const db = createDb(await sharedD1());
   const deps: Deps = {
+    ...overrides,
     db,
     env: {
       JWT_SECRET: "test-secret-test-secret-test-secret",
@@ -92,7 +107,7 @@ export const createHarness = async (): Promise<Harness> => {
   };
   const app = createApp(deps);
 
-  return {
+  const harness: Harness = {
     db,
     deps,
     async request(method, path, { body, as, query, headers: extra } = {}) {
@@ -141,6 +156,7 @@ export const createHarness = async (): Promise<Harness> => {
     },
     async reset() {
       for (const table of [
+        "link_visits",
         "links",
         "rules",
         "refresh_tokens",
@@ -155,6 +171,8 @@ export const createHarness = async (): Promise<Harness> => {
             ON CONFLICT (id) DO UPDATE SET version = version + 1`,
       );
     },
-    dispose: () => proxy.dispose(),
+    dispose: async () => {},
   };
+  await harness.reset();
+  return harness;
 };

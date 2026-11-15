@@ -99,6 +99,8 @@ describe("GET /v1/links: list my links", () => {
       id: expect.any(String),
       code: expect.any(String),
       url: "https://example.com",
+      userId: alice.id,
+      status: "active",
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
       blocked: false,

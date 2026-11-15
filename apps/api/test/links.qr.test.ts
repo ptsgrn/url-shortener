@@ -51,7 +51,8 @@ describe("FR-10: QR codes", () => {
     "showing or downloading it isn't counted as a visit (FR-11)",
     async () => {
       const { code } = await createLink(t.h, t.owner, "https://example.com");
-      for (let i = 0; i < 3; i++) await api().qr(code, t.owner);
+      for (let i = 0; i < 3; i++)
+        expect((await api().qr(code, t.owner)).status).toBe(200); // control
       expect((await api().stats(code, t.owner)).body.total).toBe(0);
     },
   );

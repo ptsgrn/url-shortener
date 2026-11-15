@@ -122,17 +122,16 @@ describe("FR-03: users only see and manage links they hold", () => {
     },
   );
 
-  test.todo(
-    "an admin's role doesn't make them the owner of a user's link",
-    async () => {
-      // Admin moderation goes through FR-13 routes, not the owner's.
-      const api = linkApi(t.h);
-      const { code } = await createLink(t.h, t.owner, "https://example.com");
-      await ok(api.update(code, t.owner, { url: "https://example.com/y" })); // control
-      const res = await api.update(code, t.admin, {
-        url: "https://example.com/x",
-      });
-      expect(res.status).toBe(404);
-    },
-  );
+  test("an admin can change any user's link (but it stays theirs)", async () => {
+    const api = linkApi(t.h);
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    const res = await api.update(code, t.admin, {
+      url: "https://example.com/x",
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      url: "https://example.com/x",
+      userId: t.owner.id,
+    });
+  });
 });

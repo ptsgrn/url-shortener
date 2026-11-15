@@ -14,7 +14,7 @@ const t = useSuite();
 const api = () => linkApi(t.h);
 
 describe("FR-08: turning a link off and on", () => {
-  test.todo("off stops the redirect; on brings it back", async () => {
+  test("off stops the redirect; on brings it back", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");
     const off = await api().update(code, t.owner, { active: false });
     expect(off.status).toBe(200);
@@ -26,7 +26,7 @@ describe("FR-08: turning a link off and on", () => {
     expect(isRedirect((await api().visit(code)).status)).toBe(true);
   });
 
-  test.todo("turning off keeps the destination and the code", async () => {
+  test("turning off keeps the destination and the code", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com/keep");
     await api().update(code, t.owner, { active: false });
     const { body } = await t.h.request("GET", `/v1/links/${code}`);
@@ -34,7 +34,7 @@ describe("FR-08: turning a link off and on", () => {
     expect(body.deactivatedAt).not.toBeNull();
   });
 
-  test.todo("is idempotent", async () => {
+  test("is idempotent", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");
     await api().update(code, t.owner, { active: false });
     const again = await api().update(code, t.owner, { active: false });
@@ -42,7 +42,7 @@ describe("FR-08: turning a link off and on", () => {
     expect(again.body.status).toBe("disabled");
   });
 
-  test.todo("the owner can't re-enable a link an admin suspended", async () => {
+  test("the owner can't re-enable a link an admin suspended", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");
     await banLink(t.h, code);
     const res = await api().update(code, t.owner, { active: true });
@@ -66,7 +66,7 @@ describe("FR-08: turning a link off and on", () => {
     },
   );
 
-  test.todo("a deleted link can't be turned back on", async () => {
+  test("a deleted link can't be turned back on", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");
     await ok(api().update(code, t.owner, { active: false })); // control
     await t.h.request("DELETE", `/v1/links/${code}`, { as: t.owner });

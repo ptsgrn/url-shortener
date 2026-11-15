@@ -74,7 +74,7 @@ describe("FR-06: each link's status", () => {
     },
   );
 
-  test.todo("the list shows the same status per link", async () => {
+  test("the list shows the same status per link", async () => {
     const a = await createLink(t.h, t.owner, "https://example.com/a");
     const b = await createLink(t.h, t.owner, "https://example.com/b");
     await api().update(a.code, t.owner, { active: false });

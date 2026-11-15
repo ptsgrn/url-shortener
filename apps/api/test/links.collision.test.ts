@@ -8,10 +8,17 @@ import {
   test,
 } from "bun:test";
 
-/** Codes `randomCode()` will return next; refilled per test. */
+const RANDOM = "../src/modules/links/random.ts";
+const { randomCode: realRandomCode } = await import(RANDOM);
+
+/**
+ * Codes `randomCode()` will return next; refilled per test. Empty → the real
+ * generator: Bun's module mocks outlive this file, so later files must still
+ * get random codes.
+ */
 const queue: string[] = [];
-mock.module("../src/modules/links/random.ts", () => ({
-  randomCode: () => queue.shift() ?? "fallbak",
+mock.module(RANDOM, () => ({
+  randomCode: (length?: number) => queue.shift() ?? realRandomCode(length),
 }));
 
 // Imported after the mock so the links service picks it up.
