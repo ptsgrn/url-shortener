@@ -42,6 +42,10 @@ export const createApp = (deps: Deps, options: AppOptions = {}) =>
             },
             { name: "Stats", description: "Link visit statistics" },
             { name: "Redirect", description: "Opening short links" },
+            {
+              name: "Admin",
+              description: "Accounts, all links and the audit log (admin only)",
+            },
           ],
           components: {
             securitySchemes: {
