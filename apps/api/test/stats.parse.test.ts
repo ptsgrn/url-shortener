@@ -2,10 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   browserOf,
   deviceOf,
-  dayEnd,
-  dayStart,
   referrerHost,
-  utcDay,
 } from "../src/modules/stats/parse.ts";
 
 const UA = {
@@ -59,20 +56,4 @@ describe("referrerHost", () => {
     "android-app://com.google.android.gm/",
     "file:///etc/passwd",
   ])("%p → null", (header) => expect(referrerHost(header)).toBeNull());
-});
-
-describe("UTC days", () => {
-  test("a day runs from 00:00 UTC to the next 00:00 UTC", () => {
-    expect(dayStart("2026-11-15").toISOString()).toBe(
-      "2026-11-15T00:00:00.000Z",
-    );
-    expect(dayEnd("2026-11-15").toISOString()).toBe("2026-11-16T00:00:00.000Z");
-    expect(dayEnd("2026-12-31").toISOString()).toBe("2027-01-01T00:00:00.000Z");
-  });
-
-  test("the day changes at midnight UTC, not local midnight", () => {
-    expect(utcDay(new Date("2026-11-14T23:59:59Z"))).toBe("2026-11-14");
-    expect(utcDay(new Date("2026-11-15T00:00:00Z"))).toBe("2026-11-15");
-    expect(utcDay(new Date("2026-11-15T06:00:00+07:00"))).toBe("2026-11-14");
-  });
 });

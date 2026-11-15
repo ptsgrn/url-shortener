@@ -41,18 +41,3 @@ export const referrerHost = (
     return null;
   }
 };
-
-/*
- * Stats days are UTC calendar days: visits are stored as UTC timestamps and
- * grouped by their UTC date. Clients convert to the viewer's time zone.
- */
-
-/** `YYYY-MM-DD` of `date` in UTC. */
-export const utcDay = (date: Date): string => date.toISOString().slice(0, 10);
-
-/** Start (00:00 UTC) of day `day` (`YYYY-MM-DD`). */
-export const dayStart = (day: string): Date => new Date(`${day}T00:00:00Z`);
-
-/** Start of the UTC day after `day`: the exclusive end of an inclusive range. */
-export const dayEnd = (day: string): Date =>
-  new Date(dayStart(day).getTime() + 24 * 60 * 60 * 1000);

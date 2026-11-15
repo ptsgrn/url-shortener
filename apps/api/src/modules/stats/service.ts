@@ -5,14 +5,15 @@ import { dbQuery, type InternalError } from "../../utils/error.ts";
 import { LinkError } from "../links/model.ts";
 import { links } from "../links/schema.ts";
 import { StatsError, type StatsModel } from "./model.ts";
-import {
-  browserOf,
-  dayEnd,
-  dayStart,
-  deviceOf,
-  referrerHost,
-} from "./parse.ts";
+import { browserOf, deviceOf, referrerHost } from "./parse.ts";
 import { linkVisits } from "./schema.ts";
+import {
+  BUCKET_SECONDS,
+  localDay,
+  localDayStart,
+  nextDay,
+  parseTimeZone,
+} from "./zone.ts";
 
 const UNKNOWN = "unknown";
 
@@ -48,19 +49,30 @@ export abstract class Stats {
   }
 
   /**
-   * Visit stats for the owner's link `code` (FR-11), over inclusive UTC
-   * days `from`..`to` (either may be omitted). Someone else's or a deleted
-   * link is `NotFound`.
+   * Visit stats for the owner's link `code` (FR-11), over inclusive calendar
+   * days `from`..`to` in time zone `tz` (default UTC; either day may be
+   * omitted). Someone else's or a deleted link is `NotFound`.
+   *
+   * Days per time zone: `from`/`to` become UTC instants (the start of each
+   * local day), and visits are counted per 15-minute UTC bucket in SQL, then
+   * each bucket is assigned to the local day it starts on. Every current
+   * time-zone offset is a multiple of 15 minutes, so a bucket never spans
+   * two local days.
    */
   static summary(
     db: DB,
     code: string,
     userId: string,
-    { from, to }: StatsModel["query"],
+    { from, to, tz }: StatsModel["query"],
   ): ResultAsync<
     StatsModel["summary"],
-    LinkError.NotFound | StatsError.InvalidRange | InternalError.Database
+    | LinkError.NotFound
+    | StatsError.InvalidRange
+    | StatsError.InvalidTimeZone
+    | InternalError.Database
   > {
+    const zone = tz === undefined ? "UTC" : parseTimeZone(tz);
+    if (!zone) return errAsync(StatsError.InvalidTimeZone as const);
     if (
       (from && !isDay(from)) ||
       (to && !isDay(to)) ||
@@ -82,11 +94,18 @@ export abstract class Stats {
       .andThen((linkId) => {
         const where = and(
           eq(linkVisits.linkId, linkId),
-          from ? gte(linkVisits.visitedAt, dayStart(from)) : undefined,
-          to ? lt(linkVisits.visitedAt, dayEnd(to)) : undefined,
+          from
+            ? gte(linkVisits.visitedAt, new Date(localDayStart(zone, from)))
+            : undefined,
+          to
+            ? lt(
+                linkVisits.visitedAt,
+                new Date(localDayStart(zone, nextDay(to))),
+              )
+            : undefined,
         );
-        // `visited_at` is Unix seconds, so this is the visit's UTC date.
-        const day = sql<string>`date(${linkVisits.visitedAt}, 'unixepoch')`;
+        // `visited_at` is Unix seconds: the start of its 15-minute UTC bucket.
+        const bucket = sql<number>`(${linkVisits.visitedAt} / ${BUCKET_SECONDS}) * ${BUCKET_SECONDS}`;
         const by = (
           key:
             | typeof linkVisits.device
@@ -101,23 +120,33 @@ export abstract class Stats {
         return dbQuery(() =>
           db.batch([
             db
-              .select({ date: day, count: count() })
+              .select({ bucket, count: count() })
               .from(linkVisits)
               .where(where)
-              .groupBy(day)
-              .orderBy(asc(day)),
+              .groupBy(bucket)
+              .orderBy(asc(bucket)),
             by(linkVisits.device),
             by(linkVisits.browser),
             by(linkVisits.referrerHost),
           ]),
         );
       })
-      .map(([daily, devices, browsers, referrers]) => ({
-        total: daily.reduce((sum, d) => sum + d.count, 0),
-        daily,
-        devices: toRecord(devices),
-        browsers: toRecord(browsers),
-        referrers: toRecord(referrers),
-      }));
+      .map(([buckets, devices, browsers, referrers]) => {
+        // Buckets come oldest first, so days come out in order too.
+        const perDay = new Map<string, number>();
+        for (const b of buckets) {
+          const date = localDay(zone, b.bucket * 1000);
+          perDay.set(date, (perDay.get(date) ?? 0) + b.count);
+        }
+        const daily = [...perDay].map(([date, count]) => ({ date, count }));
+        return {
+          timeZone: zone,
+          total: daily.reduce((sum, d) => sum + d.count, 0),
+          daily,
+          devices: toRecord(devices),
+          browsers: toRecord(browsers),
+          referrers: toRecord(referrers),
+        };
+      });
   }
 }

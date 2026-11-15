@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { links } from "../src/modules/links/schema.ts";
-import { utcDay } from "../src/modules/stats/parse.ts";
+import { localDay } from "../src/modules/stats/zone.ts";
 import { users } from "../src/modules/users/schema.ts";
 import { expect } from "bun:test";
 import type { Harness, TestResponse, TestUser } from "./harness.ts";
@@ -128,5 +128,5 @@ export const findStored = async (
   return hits;
 };
 
-/** Today in UTC (stats days), `YYYY-MM-DD`. */
-export const today = () => utcDay(new Date());
+/** Today in `zone` (stats days; default UTC), `YYYY-MM-DD`. */
+export const today = (zone = "UTC") => localDay(zone, Date.now());
