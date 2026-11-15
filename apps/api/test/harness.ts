@@ -92,9 +92,12 @@ const sharedD1 = () =>
  * builds a fresh app, so module mocks registered before it apply (see
  * `links.collision.test.ts`). Files run one at a time, so sharing is safe.
  */
-export const createHarness = async (
-  overrides: Pick<Deps, "waitUntil"> = {},
-): Promise<Harness> => {
+export const createHarness = async ({
+  env,
+  ...overrides
+}: Pick<Deps, "waitUntil"> & {
+  env?: Partial<Deps["env"]>;
+} = {}): Promise<Harness> => {
   const db = createDb(await sharedD1());
   const deps: Deps = {
     ...overrides,
@@ -103,6 +106,7 @@ export const createHarness = async (
       JWT_SECRET: "test-secret-test-secret-test-secret",
       GOOGLE_CLIENT_ID: "test",
       GOOGLE_CLIENT_SECRET: "test",
+      ...env,
     },
   };
   const app = createApp(deps);
@@ -156,6 +160,7 @@ export const createHarness = async (
     },
     async reset() {
       for (const table of [
+        "admin_actions",
         "link_visits",
         "links",
         "rules",
