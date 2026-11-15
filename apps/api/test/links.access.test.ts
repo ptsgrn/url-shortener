@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { banUser, linkApi, ok } from "./api.ts";
+import { banUser, deleteUser, linkApi, ok } from "./api.ts";
 import { createLink, useSuite } from "./fixtures.ts";
 
 /**
@@ -133,5 +133,64 @@ describe("FR-03: users only see and manage links they hold", () => {
       url: "https://example.com/x",
       userId: t.owner.id,
     });
+  });
+});
+
+describe("soft-deleted accounts lose access, whatever their role", () => {
+  test("a deleted admin can't manage rules", async () => {
+    const add = () =>
+      t.h.request("POST", "/v1/rules", {
+        as: t.admin,
+        body: { list: "blacklist", pattern: "evil.com" },
+      });
+    expect((await add()).status).toBe(201); // control
+    await deleteUser(t.h, t.admin.id);
+    const res = await add();
+    expect(res.status).toBe(401);
+    expect(
+      (await t.h.request("GET", "/v1/rules", { as: t.admin })).status,
+    ).toBe(401);
+  });
+
+  test("a deleted admin can't change other users' links", async () => {
+    const api = linkApi(t.h);
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    await ok(api.update(code, t.admin, { active: false })); // control
+    await deleteUser(t.h, t.admin.id);
+    const res = await api.update(code, t.admin, {
+      active: true,
+      userId: t.admin.id,
+    });
+    expect(res.status).toBe(401);
+    const row = await t.h.db.query.links.findFirst({
+      where: (l, { eq }) => eq(l.code, code),
+    });
+    expect(row?.userId).toBe(t.owner.id);
+    expect(row?.deactivatedAt).not.toBeNull();
+  });
+
+  test("a deleted user can't create, list, change or delete links", async () => {
+    const api = linkApi(t.h);
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    await deleteUser(t.h, t.owner.id);
+    const statuses = [
+      (await api.create(t.owner, { url: "https://example.com" })).status,
+      (await t.h.request("GET", "/v1/links", { as: t.owner })).status,
+      (await api.update(code, t.owner, { active: false })).status,
+      (await t.h.request("DELETE", `/v1/links/${code}`, { as: t.owner }))
+        .status,
+      (await api.stats(code, t.owner)).status,
+    ];
+    expect(statuses).toEqual([401, 401, 401, 401, 401]);
+  });
+
+  test("a deleted user isn't signed in", async () => {
+    expect(
+      (await t.h.request("GET", "/v1/auth/me", { as: t.owner })).status,
+    ).toBe(200); // control
+    await deleteUser(t.h, t.owner.id);
+    expect(
+      (await t.h.request("GET", "/v1/auth/me", { as: t.owner })).status,
+    ).toBe(401);
   });
 });

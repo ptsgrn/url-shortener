@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { err, ok, type ResultAsync } from "neverthrow";
 import type { DB } from "../../db/index.ts";
 import { dbQuery, type InternalError } from "../../utils/error.ts";
@@ -14,6 +14,9 @@ const publicColumns = {
   avatarUrl: true,
 } as const;
 
+/** Soft-deleted accounts are gone: they can't sign in or be authorized. */
+const active = (id: string) => and(eq(users.id, id), isNull(users.deletedAt));
+
 export abstract class User {
   static findById(
     db: DB,
@@ -24,13 +27,13 @@ export abstract class User {
   > {
     return dbQuery(() =>
       db.query.users.findFirst({
-        where: eq(users.id, id),
+        where: active(id),
         columns: publicColumns,
       }),
     ).andThen((user) => (user ? ok(user) : err(UserError.NotFound)));
   }
 
-  /** The user's role and ban state, for authorization. */
+  /** The user's role and ban state, for authorization; a deleted account is `NotFound`. */
   static access(
     db: DB,
     id: string,
@@ -40,7 +43,7 @@ export abstract class User {
   > {
     return dbQuery(() =>
       db.query.users.findFirst({
-        where: eq(users.id, id),
+        where: active(id),
         columns: { role: true, bannedAt: true },
       }),
     ).andThen((user) =>

@@ -100,6 +100,10 @@ export const banUser = (h: Harness, id: string) =>
     .set({ bannedAt: new Date().toISOString() })
     .where(eq(users.id, id));
 
+/** Soft-deletes an account (sets `deletedAt`); its access token stays valid. */
+export const deleteUser = (h: Harness, id: string) =>
+  h.db.update(users).set({ deletedAt: new Date() }).where(eq(users.id, id));
+
 /**
  * Every value stored anywhere in the database that contains `needle`, as
  * `table.column`. Used to prove something is *not* stored (FR-11: no IPs,
