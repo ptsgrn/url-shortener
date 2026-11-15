@@ -1,4 +1,4 @@
-import { dev } from '$app/env';
+import { building, dev } from '$app/env';
 import { env } from 'cloudflare:workers';
 import { createApp, type Deps } from 'api';
 import { createDb } from 'api/db';
@@ -13,9 +13,10 @@ export const requestContexts = new WeakMap<Request, ExecutionContext>();
 /**
  * The API's dependencies, built once per isolate. `env` from `cloudflare:workers`
  * is available at module scope on Workers and emulated by the adapter in `vite dev`.
+ * `vite build` imports this module to analyse routes, where reading `env` throws.
  */
 export const deps: Deps = {
-	db: createDb(env.DB),
+	db: building ? (null as never) : createDb(env.DB),
 	env,
 	// Without a recorded ctx (shouldn't happen on Workers) the task still runs,
 	// but the isolate may be stopped before it finishes.
