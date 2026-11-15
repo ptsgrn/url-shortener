@@ -13,8 +13,9 @@ import { Link } from "./service.ts";
 const fail = failWith({ ...LinkErrorStatus, ...InternalErrorStatus });
 
 /**
- * Short links, at `/links`. Looking one up is public; creating, listing and
- * deleting require a signed-in user whose account isn't suspended (FR-01).
+ * Short links, at `/links`. Looking one up is public; creating, listing,
+ * updating and deleting require a signed-in user whose account isn't
+ * suspended (FR-01). Admins can update any link.
  */
 export const links = (deps: Deps) =>
   new Elysia({
@@ -68,6 +69,35 @@ export const links = (deps: Deps) =>
         response: {
           200: LinkModel.link,
           404: LinkModel.notFound,
+          500: internalErrorBody,
+        },
+      },
+    )
+    .patch(
+      "/:code",
+      ({ params, body, user, status }) =>
+        Link.update(deps.db, params.code, user, body).match(
+          (link) => link,
+          fail(status),
+        ),
+      {
+        guardRole: "user",
+        detail: {
+          summary: "Change a link's destination, on/off state or owner",
+          description: [
+            "Owners change their own links: `url` (checked against the domain rules, like on create) and `active` (`false` turns the link off, `true` back on). The code never changes.",
+            "Admins can change any link, including one they suspended, and can move it to another user with `userId`.",
+            "A link suspended by an admin can't be changed by its owner (`LINK_BANNED`). Someone else's or a deleted link is 404.",
+          ].join("\n\n"),
+        },
+        params: LinkModel.params,
+        body: LinkModel.updateBody,
+        response: {
+          200: LinkModel.ownedLink,
+          401: AuthModel.unauthorized,
+          403: t.Union([AuthModel.forbidden, LinkModel.updateForbidden]),
+          404: LinkModel.notFound,
+          422: LinkModel.ownerNotFound,
           500: internalErrorBody,
         },
       },

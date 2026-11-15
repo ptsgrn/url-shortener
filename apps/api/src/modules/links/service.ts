@@ -5,6 +5,8 @@ import { dbQuery, InternalError } from "../../utils/error.ts";
 import { Rule } from "../rules/service.ts";
 import { LinkError, type LinkModel } from "./model.ts";
 import { randomCode } from "./random.ts";
+import type { Role } from "../users/service.ts";
+import { users } from "../users/schema.ts";
 import { links } from "./schema.ts";
 
 /** How many fresh codes to try before giving up on a create. */
@@ -45,6 +47,51 @@ const withBlocked = <T extends { url: string }>(
     }),
   );
 };
+
+type Status = LinkModel["ownedLink"]["status"];
+
+const statusOf = (link: {
+  bannedAt: Date | null;
+  deactivatedAt: Date | null;
+  blocked: boolean;
+}): Status =>
+  link.bannedAt
+    ? "banned"
+    : link.deactivatedAt
+      ? "disabled"
+      : link.blocked
+        ? "blocked"
+        : "active";
+
+/** `withBlocked` plus the combined `status` (see `LinkModel`). */
+const withStatus = <
+  T extends { url: string; bannedAt: Date | null; deactivatedAt: Date | null },
+>(
+  db: DB,
+  rows: T[],
+): ResultAsync<
+  (T & { blocked: boolean; status: Status })[],
+  InternalError.Database
+> =>
+  withBlocked(db, rows).map((rows) =>
+    rows.map((row) => ({ ...row, status: statusOf(row) })),
+  );
+
+const ownedColumns = {
+  id: true,
+  code: true,
+  url: true,
+  userId: true,
+  createdAt: true,
+  updatedAt: true,
+  ...statusColumns,
+} as const;
+
+/** Who is updating a link: owners manage their own links, admins any link. */
+export interface Actor {
+  id: string;
+  role: Role;
+}
 
 export abstract class Link {
   static create(
@@ -88,6 +135,49 @@ export abstract class Link {
         ? errAsync(LinkError.Blocked as const)
         : attempt(MAX_CODE_ATTEMPTS),
     );
+  }
+
+  /**
+   * Where `code` should redirect right now (FR-09): it exists, isn't deleted,
+   * disabled or suspended, its owner isn't suspended, and its destination
+   * passes the current domain rules (FR-04). Otherwise, why not.
+   */
+  static resolve(
+    db: DB,
+    code: string,
+  ): ResultAsync<
+    { id: string; url: string },
+    | LinkError.NotFound
+    | LinkError.Disabled
+    | LinkError.Banned
+    | LinkError.Blocked
+    | InternalError.Database
+  > {
+    return dbQuery(() =>
+      db
+        .select({
+          id: links.id,
+          url: links.url,
+          deactivatedAt: links.deactivatedAt,
+          bannedAt: links.bannedAt,
+          ownerBannedAt: users.bannedAt,
+        })
+        .from(links)
+        .leftJoin(users, eq(users.id, links.userId))
+        .where(byCode(code))
+        .get(),
+    )
+      .andThen((link) => {
+        if (!link) return err(LinkError.NotFound);
+        if (link.bannedAt || link.ownerBannedAt) return err(LinkError.Banned);
+        if (link.deactivatedAt) return err(LinkError.Disabled);
+        return ok({ id: link.id, url: link.url });
+      })
+      .andThen((link) =>
+        Rule.check(db, link.url).andThen((verdict) =>
+          verdict === "allowed" ? ok(link) : err(LinkError.Blocked),
+        ),
+      );
   }
 
   static find(
@@ -153,6 +243,104 @@ export abstract class Link {
     );
   }
 
+  /**
+   * Changes a link's destination (re-checked against the domain rules),
+   * turns it on or off, and (admins only) moves it to another user. Owners
+   * can't touch a link an admin suspended; someone else's or a deleted link
+   * is `NotFound`. Admins may change any link. All-or-nothing: on any error
+   * nothing changes.
+   */
+  static update(
+    db: DB,
+    code: string,
+    actor: Actor,
+    { url, active, userId }: LinkModel["updateBody"],
+  ): ResultAsync<
+    LinkModel["ownedLink"],
+    | LinkError.NotFound
+    | LinkError.Banned
+    | LinkError.Blocked
+    | LinkError.OwnerNotFound
+    | LinkError.OwnerChangeForbidden
+    | InternalError.Database
+  > {
+    const admin = actor.role === "admin";
+    if (userId !== undefined && !admin)
+      return errAsync(LinkError.OwnerChangeForbidden as const);
+
+    const destinationOk = (link: { id: string; deactivatedAt: Date | null }) =>
+      url === undefined
+        ? okAsync(link)
+        : Rule.check(db, url).andThen((verdict) =>
+            verdict === "allowed" ? ok(link) : err(LinkError.Blocked),
+          );
+    const ownerOk = <T>(link: T) =>
+      userId === undefined
+        ? okAsync(link)
+        : dbQuery(() =>
+            db.query.users.findFirst({
+              where: and(eq(users.id, userId), isNull(users.deletedAt)),
+              columns: { id: true },
+            }),
+          ).andThen((user) => (user ? ok(link) : err(LinkError.OwnerNotFound)));
+
+    return dbQuery(() =>
+      db.query.links.findFirst({
+        where: byCode(code),
+        columns: {
+          id: true,
+          userId: true,
+          bannedAt: true,
+          deactivatedAt: true,
+        },
+      }),
+    )
+      .andThen((link) => {
+        if (!link || (!admin && link.userId !== actor.id))
+          return err(LinkError.NotFound);
+        if (!admin && link.bannedAt) return err(LinkError.Banned);
+        return ok(link);
+      })
+      .andThen(destinationOk)
+      .andThen(ownerOk)
+      .andThen((link) =>
+        dbQuery(() =>
+          db
+            .update(links)
+            .set({
+              url,
+              userId,
+              // Turning off twice keeps the original time (idempotent).
+              ...(active === false && {
+                deactivatedAt: link.deactivatedAt ?? new Date(),
+              }),
+              ...(active === true && {
+                deactivatedAt: null,
+                deactivatedReason: null,
+              }),
+              updatedAt: new Date(),
+            })
+            // Not deleted in the meantime.
+            .where(and(eq(links.id, link.id), notDeleted))
+            .returning({
+              id: links.id,
+              code: links.code,
+              url: links.url,
+              userId: links.userId,
+              createdAt: links.createdAt,
+              updatedAt: links.updatedAt,
+              deactivatedAt: links.deactivatedAt,
+              deactivatedReason: links.deactivatedReason,
+              bannedAt: links.bannedAt,
+              bannedReason: links.bannedReason,
+            })
+            .get(),
+        ),
+      )
+      .andThen((row) => (row ? ok(row) : err(LinkError.NotFound)))
+      .andThen((row) => withStatus(db, [row]).map(([updated]) => updated!));
+  }
+
   /** The user's links, newest first. */
   static list(
     db: DB,
@@ -168,15 +356,8 @@ export abstract class Link {
         orderBy: [desc(links.createdAt), desc(sql`rowid`)],
         offset,
         limit,
-        columns: {
-          id: true,
-          code: true,
-          url: true,
-          createdAt: true,
-          updatedAt: true,
-          ...statusColumns,
-        },
+        columns: ownedColumns,
       }),
-    ).andThen((rows) => withBlocked(db, rows));
+    ).andThen((rows) => withStatus(db, rows));
   }
 }

@@ -4,3 +4,4 @@ export * from "../modules/users/schema.ts";
 export * from "../modules/auth/schema.ts";
 export * from "../modules/links/schema.ts";
 export * from "../modules/rules/schema.ts";
+export * from "../modules/stats/schema.ts";

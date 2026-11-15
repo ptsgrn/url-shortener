@@ -40,6 +40,8 @@ export const createApp = (deps: Deps, options: AppOptions = {}) =>
               name: "Rules",
               description: "Domain whitelist and blacklist (admin only)",
             },
+            { name: "Stats", description: "Link visit statistics" },
+            { name: "Redirect", description: "Opening short links" },
           ],
           components: {
             securitySchemes: {
