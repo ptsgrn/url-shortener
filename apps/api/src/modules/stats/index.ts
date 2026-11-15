@@ -18,7 +18,8 @@ const fail = failWith({
 });
 
 /**
- * Visit stats (FR-11), at `/stats`. Owner only. Visits are recorded by the
+ * Visit stats (FR-11), at `/stats`. Owners see their own links, admins
+ * any link (FR-03). Visits are recorded by the
  * redirect (`/r/:code`); every redirect counts, repeats included.
  */
 export const stats = (deps: Deps) =>
@@ -31,14 +32,14 @@ export const stats = (deps: Deps) =>
     .get(
       "/:code",
       ({ params, query, user, status }) =>
-        Stats.summary(deps.db, params.code, user.id, query).match(
+        Stats.summary(deps.db, params.code, user, query).match(
           (summary) => summary,
           fail(status),
         ),
       {
         guardRole: "user",
         detail: {
-          summary: "Visit stats for one of the signed-in user's links",
+          summary: "Visit stats for a link (your own; admins: any)",
           description: [
             "Total, per day and by device, browser and referrer domain, over the inclusive calendar days `from`..`to`. Counts redirects, not unique people. Values that couldn't be detected are under `unknown`.",
             "**Days and time zones.** Days are calendar days in `tz` (default `UTC`), and the response echoes the zone used as `timeZone`. Visits are stored as UTC instants and assigned to days with the server's time-zone database, so daylight-saving changes are applied per visit. Limitations:",
