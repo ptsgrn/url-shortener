@@ -5,6 +5,9 @@ JWT_SECRET=
 # Authorized redirect URI: http://localhost:3000/api/v1/auth/google/callback
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+# Optional: only these email domains may sign in (comma-separated, exact
+# domains; the provider must have verified the email). Unset: anyone.
+# ALLOWED_EMAIL_DOMAINS=example.ac.th,student.example.ac.th
 # Enables /api/dev (sign in as any user). Local only: uncomment in your
 # .dev.vars, never set it in production.
 # DEV_TOOLS=true
