@@ -27,7 +27,7 @@ const customCodesWork = async () => {
 };
 
 describe("FR-05: the short link", () => {
-  test.todo("is returned as https://chula.me/{code}", async () => {
+  test.todo("is returned as the full short URL, {site}/{code}", async () => {
     const res = await api().create(t.owner, { url: "https://example.com" });
     expect(res.status).toBe(200);
     expect(res.body.code).toMatch(CODE);

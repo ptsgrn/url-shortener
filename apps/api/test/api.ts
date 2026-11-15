@@ -13,7 +13,8 @@ import type { Harness, TestResponse, TestUser } from "./harness.ts";
  * edit. Tests for unbuilt features are `test.todo` (run them with
  * `bun test --todo`; Bun flags a todo that starts passing).
  */
-export const SHORT_ORIGIN = "https://chula.me";
+/** The site's origin in tests (the app isn't tied to any one domain). */
+export const SHORT_ORIGIN = "https://short.example";
 
 /** Path segments the web app serves; a custom code must never take one (FR-05). */
 export const SYSTEM_PATHS = ["api", "login", "_app", "API", "Login"];
@@ -64,7 +65,7 @@ export const linkApi = (h: Harness) => ({
       ) as Record<string, string>,
     }),
   /**
-   * FR-09: what `https://chula.me/{code}` does. The web app's root route is
+   * FR-09: what `{site}/{code}` does. The web app's root route is
    * expected to forward to this, so the API owns the decision.
    */
   visit: (code: string, headers: Record<string, string> = {}) =>

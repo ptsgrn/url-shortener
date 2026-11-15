@@ -1,5 +1,5 @@
 /**
- * Codes a user can't choose: `chula.me/{code}` would clash with one of the
+ * Codes a user can't choose: `{site}/{code}` would clash with one of the
  * web app's own paths (FR-05). Compared case-insensitively, so `API` or
  * `Login` can't pose as them either. Add a name here whenever `apps/web`
  * gains a top-level route.

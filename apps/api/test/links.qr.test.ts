@@ -65,6 +65,6 @@ describe("FR-10: QR codes", () => {
   });
 
   test.todo(
-    "decodes to https://chula.me/{code} (needs a QR decoder in devDependencies)",
+    "decodes to the short URL, {site}/{code} (needs a QR decoder in devDependencies)",
   );
 });

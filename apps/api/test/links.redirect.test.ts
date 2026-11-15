@@ -4,7 +4,7 @@ import { addRule, allowAll, createLink, useSuite } from "./fixtures.ts";
 import { createHarness } from "./harness.ts";
 
 /**
- * FR-09: anyone opens https://chula.me/{code} (or scans its QR) without
+ * FR-09: anyone opens {site}/{code} (or scans its QR) without
  * signing in. It redirects only if the link is active, not deleted or
  * suspended, its owner isn't suspended, and the destination passes FR-04
  * now. Otherwise: a status page, no redirect, and no counted visit.
