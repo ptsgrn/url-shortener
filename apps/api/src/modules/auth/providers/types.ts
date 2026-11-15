@@ -4,6 +4,8 @@ export interface OAuthProfile {
   /** The user's id at the provider. */
   id: string;
   email?: string;
+  /** The provider confirmed the user controls `email`. */
+  emailVerified?: boolean;
   name?: string;
   avatarUrl?: string;
 }

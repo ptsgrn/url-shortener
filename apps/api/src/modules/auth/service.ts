@@ -10,9 +10,13 @@ import {
   type Result,
 } from "neverthrow";
 import type { Deps } from "../../utils/deps.ts";
-import { dbQuery, InternalError } from "../../utils/error.ts";
+import {
+  dbQuery,
+  InternalError,
+  InternalErrorStatus,
+} from "../../utils/error.ts";
 import type { UserError, UserModel } from "../users/model.ts";
-import { User } from "../users/service.ts";
+import { User, type Role } from "../users/service.ts";
 import {
   ACCESS_COOKIE,
   cookieOptions,
@@ -29,8 +33,11 @@ import {
 import { providers, type OAuthProvider } from "./providers/index.ts";
 import { accounts } from "./schema.ts";
 import { Token } from "./token.ts";
+import { emailAllowed, parseDomains } from "./policy.ts";
 
 export type SessionUser = UserModel["user"];
+
+const ROLE_RANK = { user: 0, admin: 1 } as const satisfies Record<Role, number>;
 
 const OAUTH_COOKIES = ["oauth_state", "oauth_verifier", "oauth_redirect"];
 
@@ -181,6 +188,9 @@ export abstract class Auth {
     | AuthError.UnknownProvider
     | AuthError.InvalidOAuthState
     | AuthError.OAuthExchangeFailed
+    | AuthError.EmailNotAllowed
+    | AuthError.AccountSuspended
+    | AuthError.AccountUnavailable
     | InternalError
   > {
     return safeTry(async function* () {
@@ -199,10 +209,30 @@ export abstract class Auth {
         () => provider.getProfile(code, verifier),
         () => AuthError.OAuthExchangeFailed as const,
       )();
+      // FR-01: checked before any account is created for the visitor.
+      if (!emailAllowed(profile, parseDomains(deps.env.ALLOWED_EMAIL_DOMAINS)))
+        return err(AuthError.EmailNotAllowed);
       const userId = yield* Auth.upsertOAuthUser(deps, providerName, profile);
+      // A suspended or deleted account gets no session at all.
+      yield* Auth.mayStartSession(deps, userId);
       yield* Auth.startSession(deps, jar, secure, userId);
       return ok(redirectTo);
     });
+  }
+
+  /** Refuses sign-in to suspended (FR-15) and deleted accounts. */
+  private static mayStartSession(
+    { db }: Deps,
+    userId: string,
+  ): ResultAsync<
+    void,
+    AuthError.AccountSuspended | AuthError.AccountUnavailable | InternalError
+  > {
+    return User.access(db, userId)
+      .mapErr((e) => (isInternal(e) ? e : AuthError.AccountUnavailable))
+      .andThen(({ banned }) =>
+        banned ? err(AuthError.AccountSuspended) : ok(undefined),
+      );
   }
 
   /** Finds the user linked to this provider account, creating one if needed. */
@@ -256,4 +286,33 @@ export const authService = (deps: Deps) =>
           (error) => status(AuthErrorStatus[error], { error }),
         ),
     },
+    /**
+     * `guardRole: "user" | "admin"`: like `auth: true`, but also requires the
+     * user to hold at least that role (admin outranks user) and not be
+     * banned. Resolves `user` with its `role`.
+     */
+    guardRole: (required: Role) => ({
+      detail: { security: [{ cookieAuth: [] }] },
+      resolve: ({ cookie, status }) =>
+        Auth.sessionUserId(deps, elysiaCookieJar(cookie))
+          .andThen((id) =>
+            User.access(deps.db, id)
+              // A valid token for a user that no longer exists.
+              .mapErr((e) =>
+                isInternal(e) ? e : (AuthError.Unauthorized as const),
+              )
+              .andThen(({ role, banned }) =>
+                !banned && ROLE_RANK[role] >= ROLE_RANK[required]
+                  ? ok({ id, role })
+                  : err(AuthError.Forbidden as const),
+              ),
+          )
+          .match(
+            (user) => ({ user }),
+            (error) =>
+              isInternal(error)
+                ? status(InternalErrorStatus[error], { error })
+                : status(AuthErrorStatus[error], { error }),
+          ),
+    }),
   });

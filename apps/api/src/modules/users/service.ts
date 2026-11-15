@@ -1,16 +1,23 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { err, ok, type ResultAsync } from "neverthrow";
 import type { DB } from "../../db/index.ts";
 import { dbQuery, type InternalError } from "../../utils/error.ts";
 import { UserError, type UserModel } from "./model.ts";
 import { users } from "./schema.ts";
 
+export type Role = "user" | "admin";
+
 const publicColumns = {
   id: true,
   email: true,
   name: true,
   avatarUrl: true,
+  role: true,
+  bannedAt: true,
 } as const;
+
+/** Soft-deleted accounts are gone: they can't sign in or be authorized. */
+const active = (id: string) => and(eq(users.id, id), isNull(users.deletedAt));
 
 export abstract class User {
   static findById(
@@ -22,10 +29,38 @@ export abstract class User {
   > {
     return dbQuery(() =>
       db.query.users.findFirst({
-        where: eq(users.id, id),
+        where: active(id),
         columns: publicColumns,
       }),
-    ).andThen((user) => (user ? ok(user) : err(UserError.NotFound)));
+    ).andThen((user) => {
+      if (!user) return err(UserError.NotFound);
+      const { bannedAt, role, ...profile } = user;
+      return ok({
+        ...profile,
+        role: role ?? "user",
+        suspended: bannedAt !== null,
+      });
+    });
+  }
+
+  /** The user's role and ban state, for authorization; a deleted account is `NotFound`. */
+  static access(
+    db: DB,
+    id: string,
+  ): ResultAsync<
+    { role: Role; banned: boolean },
+    UserError.NotFound | InternalError.Database
+  > {
+    return dbQuery(() =>
+      db.query.users.findFirst({
+        where: active(id),
+        columns: { role: true, bannedAt: true },
+      }),
+    ).andThen((user) =>
+      user
+        ? ok({ role: user.role ?? "user", banned: user.bannedAt != null })
+        : err(UserError.NotFound),
+    );
   }
 
   /** Creates a user and returns its id. */

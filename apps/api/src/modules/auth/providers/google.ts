@@ -19,12 +19,14 @@ export const google: ProviderFactory = (env, redirectUri) => {
       const claims = decodeIdToken(tokens.idToken()) as {
         sub: string;
         email?: string;
+        email_verified?: boolean;
         name?: string;
         picture?: string;
       };
       return {
         id: claims.sub,
         email: claims.email,
+        emailVerified: claims.email_verified === true,
         name: claims.name,
         avatarUrl: claims.picture,
       };

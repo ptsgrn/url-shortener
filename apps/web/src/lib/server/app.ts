@@ -4,10 +4,23 @@ import { createApp, type Deps } from 'api';
 import { createDb } from 'api/db';
 
 /**
+ * Each request's Workers `ExecutionContext`, recorded by the `/api` route.
+ * `deps` is built once per isolate, but `ctx` is per request, so the API's
+ * `waitUntil` looks it up by the `Request` it is handling.
+ */
+export const requestContexts = new WeakMap<Request, ExecutionContext>();
+
+/**
  * The API's dependencies, built once per isolate. `env` from `cloudflare:workers`
  * is available at module scope on Workers and emulated by the adapter in `vite dev`.
  */
-export const deps: Deps = { db: createDb(env.DB), env };
+export const deps: Deps = {
+	db: createDb(env.DB),
+	env,
+	// Without a recorded ctx (shouldn't happen on Workers) the task still runs,
+	// but the isolate may be stopped before it finishes.
+	waitUntil: (request, task) => requestContexts.get(request)?.waitUntil(task)
+};
 
 /**
  * The Elysia app from `apps/api`, with dependencies injected.
