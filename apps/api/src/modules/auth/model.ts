@@ -14,6 +14,12 @@ export enum AuthError {
   UnknownProvider = "AUTH_UNKNOWN_PROVIDER",
   InvalidOAuthState = "AUTH_INVALID_OAUTH_STATE",
   OAuthExchangeFailed = "AUTH_OAUTH_EXCHANGE_FAILED",
+  /** Sign-in refused: the email isn't verified or its domain isn't allowed (FR-01). */
+  EmailNotAllowed = "AUTH_EMAIL_NOT_ALLOWED",
+  /** Sign-in refused: an admin suspended the account (FR-15). */
+  AccountSuspended = "AUTH_ACCOUNT_SUSPENDED",
+  /** Sign-in refused: the account was deleted. */
+  AccountUnavailable = "AUTH_ACCOUNT_UNAVAILABLE",
 }
 
 export const AuthErrorStatus = {
@@ -25,6 +31,9 @@ export const AuthErrorStatus = {
   [AuthError.UnknownProvider]: 404,
   [AuthError.InvalidOAuthState]: 400,
   [AuthError.OAuthExchangeFailed]: 400,
+  [AuthError.EmailNotAllowed]: 403,
+  [AuthError.AccountSuspended]: 403,
+  [AuthError.AccountUnavailable]: 403,
 } as const satisfies Record<AuthError, number>;
 
 export type RefreshError =
@@ -51,6 +60,11 @@ export const AuthModel = {
   signInFailed: errorBody(
     AuthError.InvalidOAuthState,
     AuthError.OAuthExchangeFailed,
+  ),
+  signInRefused: errorBody(
+    AuthError.EmailNotAllowed,
+    AuthError.AccountSuspended,
+    AuthError.AccountUnavailable,
   ),
 } as const;
 
