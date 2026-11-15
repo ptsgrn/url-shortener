@@ -43,6 +43,13 @@
       "when": 1794686497118,
       "tag": "0005_jittery_wolfpack",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1794732134823,
+      "tag": "0006_volatile_surge",
+      "breakpoints": true
     }
   ]
 }
