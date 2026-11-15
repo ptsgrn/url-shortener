@@ -33,6 +33,7 @@ import {
 import { providers, type OAuthProvider } from "./providers/index.ts";
 import { accounts } from "./schema.ts";
 import { Token } from "./token.ts";
+import { emailAllowed, parseDomains } from "./policy.ts";
 
 export type SessionUser = UserModel["user"];
 
@@ -187,6 +188,9 @@ export abstract class Auth {
     | AuthError.UnknownProvider
     | AuthError.InvalidOAuthState
     | AuthError.OAuthExchangeFailed
+    | AuthError.EmailNotAllowed
+    | AuthError.AccountSuspended
+    | AuthError.AccountUnavailable
     | InternalError
   > {
     return safeTry(async function* () {
@@ -205,10 +209,30 @@ export abstract class Auth {
         () => provider.getProfile(code, verifier),
         () => AuthError.OAuthExchangeFailed as const,
       )();
+      // FR-01: checked before any account is created for the visitor.
+      if (!emailAllowed(profile, parseDomains(deps.env.ALLOWED_EMAIL_DOMAINS)))
+        return err(AuthError.EmailNotAllowed);
       const userId = yield* Auth.upsertOAuthUser(deps, providerName, profile);
+      // A suspended or deleted account gets no session at all.
+      yield* Auth.mayStartSession(deps, userId);
       yield* Auth.startSession(deps, jar, secure, userId);
       return ok(redirectTo);
     });
+  }
+
+  /** Refuses sign-in to suspended (FR-15) and deleted accounts. */
+  private static mayStartSession(
+    { db }: Deps,
+    userId: string,
+  ): ResultAsync<
+    void,
+    AuthError.AccountSuspended | AuthError.AccountUnavailable | InternalError
+  > {
+    return User.access(db, userId)
+      .mapErr((e) => (isInternal(e) ? e : AuthError.AccountUnavailable))
+      .andThen(({ banned }) =>
+        banned ? err(AuthError.AccountSuspended) : ok(undefined),
+      );
   }
 
   /** Finds the user linked to this provider account, creating one if needed. */
