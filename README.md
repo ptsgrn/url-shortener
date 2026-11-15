@@ -121,7 +121,21 @@ Production runs on Cloudflare Workers, built and deployed by [Workers Builds](ht
    - `JWT_SECRET`: generate one with `openssl rand -hex 32`.
    - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`: from your Google OAuth client. Add `https://<your-domain>/api/v1/auth/google/callback` to its authorized redirect URIs.
 
+   - `ALLOWED_EMAIL_DOMAINS` (optional): comma-separated email domains allowed to sign in, such as `example.ac.th,student.example.ac.th`. Domains match exactly, so list subdomains separately, and the provider must have verified the email. Unset means anyone with a Google account can sign in.
+
    Never set `DEV_TOOLS` in production.
+
+4. Make yourself an admin. There is no API for roles: sign in once, then set the role in the database from `apps/web`:
+
+   ```sh
+   bunx wrangler d1 execute DB --remote --command "UPDATE users SET role = 'admin' WHERE email = 'you@example.com'"
+   ```
+
+   Use the same command to remove an admin (`role = 'user'`). Admins can suspend and restore other users' accounts, but not their own or another admin's.
+
+### Sessions and suspensions
+
+A session lasts until it goes unused for 7 days. Suspending an account ends all of its sessions at once, blocks it from managing links and stops its links redirecting. Restoring it doesn't bring the old sessions back: the user signs in again. Every admin action (suspensions, changes to other users' links, domain rule changes) is recorded in the audit log at `GET /api/v1/admin/audit`.
 
 ### What a deploy does
 
