@@ -37,6 +37,9 @@ const signIn = async (h: Harness, as: OAuthProfile) => {
     query: { code: "code", state, iss: "https://idp.example", authuser: "1" },
     headers: { cookie: jar.join("; ") },
   });
+  // Workers' Response.redirect rejects relative URLs, so it must be absolute.
+  if (res.status === 302)
+    expect(URL.canParse(res.headers.get("location")!)).toBe(true);
   const session = res.headers
     .getSetCookie()
     .some(

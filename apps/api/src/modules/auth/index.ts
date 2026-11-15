@@ -107,7 +107,11 @@ export const auth = (deps: Deps) =>
           origin(request),
           elysiaCookieJar(cookie),
           isSecure(request),
-        ).match((to) => redirect(to, 302), fail(status)),
+        ).match(
+          // `to` is a path; Workers' Response.redirect needs an absolute URL.
+          (to) => redirect(new URL(to, request.url).href, 302),
+          fail(status),
+        ),
       {
         detail: {
           summary: "OAuth callback (sets session cookies, redirects back)",
