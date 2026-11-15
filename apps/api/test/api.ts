@@ -1,4 +1,6 @@
 import { eq, sql } from "drizzle-orm";
+import { REFRESH_COOKIE } from "../src/modules/auth/cookie.ts";
+import { Token } from "../src/modules/auth/token.ts";
 import { links } from "../src/modules/links/schema.ts";
 import { localDay } from "../src/modules/stats/zone.ts";
 import { users } from "../src/modules/users/schema.ts";
@@ -99,6 +101,20 @@ export const banUser = (h: Harness, id: string) =>
     .update(users)
     .set({ bannedAt: new Date().toISOString() })
     .where(eq(users.id, id));
+
+/** A refresh-token cookie for `userId`, as a real sign-in would set it. */
+export const refreshCookie = async (h: Harness, userId: string) => {
+  const issued = await Token.issueRefresh(h.db, userId);
+  if (issued.isErr()) throw new Error(issued.error);
+  return {
+    id: issued.value.id,
+    cookie: `${REFRESH_COOKIE}=${issued.value.token}`,
+  };
+};
+
+/** `POST /v1/auth/refresh` with only a refresh-token cookie. */
+export const refresh = (h: Harness, cookie: string) =>
+  h.request("POST", "/v1/auth/refresh", { headers: { cookie } });
 
 /** Soft-deletes an account (sets `deletedAt`); its access token stays valid. */
 export const deleteUser = (h: Harness, id: string) =>
