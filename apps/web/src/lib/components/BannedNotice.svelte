@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import banned from '#lib/assets/banned.png';
 	import { logout } from '#lib/auth.ts';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -13,6 +14,11 @@
 	<h1 class="mt-6 text-[40px] leading-tight font-semibold">คุณโดนแบน</h1>
 	{#if reason}
 		<p class="mt-8 text-base">เนื่องจาก <span class="text-brand">{reason}</span></p>
+	{:else}
+		<p class="mt-8 text-base">
+			บัญชีของคุณถูกระงับโดยผู้ดูแลระบบ หากคิดว่าผิดพลาด
+			<a href={resolve('/contact')} class="text-brand underline">ติดต่อเรา</a>
+		</p>
 	{/if}
 	{#if until}
 		<p class="mt-2 text-base">ปลดแบนวันที่ {dateTime.format(until)}</p>
