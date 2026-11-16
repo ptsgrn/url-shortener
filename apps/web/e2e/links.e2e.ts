@@ -117,8 +117,7 @@ test('edits a link destination', async ({ page }) => {
 	);
 });
 
-// fixme: the API deletes the link but answers 500 (`status(204, undefined)` fails on workerd).
-test.fixme('deletes a link after confirming', async ({ page }) => {
+test('deletes a link after confirming', async ({ page }) => {
 	const code = uniqueCode();
 	await create(page, code);
 	const card = page.getByRole('article').filter({ hasText: `/${code}` });
