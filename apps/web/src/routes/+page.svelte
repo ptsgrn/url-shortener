@@ -1,17 +1,22 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
-	import { resolve } from '$app/paths';
 	import { api } from '#lib/api.ts';
+	import LinkCard from '#lib/components/LinkCard.svelte';
+	import LinkQrDialog from '#lib/components/LinkQrDialog.svelte';
+	import { displayUrl, shortUrl } from '#lib/links.ts';
 	import { AuthError, InternalError, LinkError } from 'api/errors';
-	import type { PageProps } from './$types';
+	import { toast } from 'svelte-sonner';
 
-	let { data }: PageProps = $props();
+	type Link = { code: string; url: string; createdAt: Date };
 
 	let url = $state('');
-	let result = $state<{ code: string; url: string } | null>(null);
-	let error = $state<string | null>(null);
+	let customCode = $state('');
+	let submitting = $state(false);
+	// There is no "list my links" endpoint yet, so this only holds links made in this tab.
+	let recent = $state<Link[]>([]);
+	let dialog = $state<{ link: Link; title: string } | null>(null);
+	let dialogOpen = $state(false);
 
-	const shortenErrors: Record<
+	const errors: Record<
 		| AuthError.Unauthorized
 		| AuthError.Forbidden
 		| LinkError.Blocked
@@ -19,54 +24,87 @@
 		| InternalError,
 		string
 	> = {
-		[AuthError.Unauthorized]: 'Your session expired. Sign in again.',
-		[AuthError.Forbidden]: 'Your account is suspended, so you can’t create links.',
-		[LinkError.Blocked]: 'Links to this website aren’t allowed.',
-		[LinkError.CodeTaken]: 'That short name is taken. Try another.',
-		[InternalError.Database]: 'Something went wrong on our side. Try again.',
-		[InternalError.Crypto]: 'Something went wrong on our side. Try again.'
+		[AuthError.Unauthorized]: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง',
+		[AuthError.Forbidden]: 'บัญชีของคุณถูกระงับ จึงสร้างลิงก์ไม่ได้',
+		[LinkError.Blocked]: 'ไม่อนุญาตให้สร้างลิงก์ไปยังเว็บไซต์นี้',
+		[LinkError.CodeTaken]: 'ชื่อลิงก์นี้ถูกใช้แล้ว ลองชื่ออื่น',
+		[InternalError.Database]: 'เกิดข้อผิดพลาด กรุณาลองใหม่',
+		[InternalError.Crypto]: 'เกิดข้อผิดพลาด กรุณาลองใหม่'
 	};
+
+	function showQr(link: Link, title: string) {
+		dialog = { link, title };
+		dialogOpen = true;
+	}
 
 	async function shorten(event: SubmitEvent) {
 		event.preventDefault();
-		const res = await api.v1.links.post({ url });
-		if (res.error) {
-			result = null;
-			error =
-				res.error.status === 422 ? 'Enter a valid URL.' : shortenErrors[res.error.value.error];
+		if (customCode) {
+			toast.error('ยังไม่รองรับการตั้งชื่อลิงก์เอง เว้นว่างไว้เพื่อสุ่มลิงก์');
 			return;
 		}
-		error = null;
-		result = res.data;
-	}
-
-	async function logout() {
-		await api.v1.auth.logout.post();
-		result = null;
-		await invalidateAll();
+		submitting = true;
+		const res = await api.v1.links.post({ url });
+		submitting = false;
+		if (res.error) {
+			toast.error(
+				res.error.status === 422 ? 'กรุณาใส่ URL ที่ถูกต้อง' : errors[res.error.value.error]
+			);
+			return;
+		}
+		const link = { ...res.data, createdAt: new Date() };
+		recent = [link, ...recent];
+		url = '';
+		showQr(link, 'สร้างลิงก์สำเร็จ!');
 	}
 </script>
 
-<h1>URL shortener</h1>
-<p>API status: {data.health?.status ?? 'unreachable'}</p>
+<form onsubmit={shorten} class="flex flex-col">
+	<h1 class="text-center text-[40px] leading-tight font-semibold">
+		<label for="url">วางลิงค์ URL</label>
+	</h1>
+	<input
+		id="url"
+		type="url"
+		required
+		bind:value={url}
+		placeholder="https://example.com/a-very-long-link"
+		class="mt-5 h-11 rounded-md border border-input bg-card px-5 text-[15px] placeholder:text-[#979797]"
+	/>
 
-{#if data.user}
-	<p>
-		Signed in as {data.user.name ?? data.user.email}
-		<button type="button" onclick={logout}>Sign out</button>
-	</p>
+	<label for="code" class="mt-5 text-xl">ลิงค์ URL ใหม่</label>
+	<div class="mt-2 flex items-center">
+		<span class="text-xl">{displayUrl(shortUrl(''))}</span>
+		<input
+			id="code"
+			bind:value={customCode}
+			placeholder="เว้นว่างเพื่อสุ่มลิงก์อัตโนมัติ"
+			class="h-5 min-w-0 flex-1 rounded-sm bg-muted px-2 text-xs placeholder:text-foreground/60"
+		/>
+	</div>
 
-	<form onsubmit={shorten}>
-		<input type="url" bind:value={url} required placeholder="https://example.com" />
-		<button type="submit">Shorten</button>
-	</form>
+	<button
+		type="submit"
+		disabled={submitting}
+		class="mt-8 h-17.5 rounded-md bg-primary text-5xl font-semibold hover:bg-primary/80 disabled:opacity-50"
+		>สร้างลิงค์</button
+	>
+</form>
 
-	{#if result}
-		<p>Short code: <code>{result.code}</code> → {result.url}</p>
-	{/if}
-	{#if error}
-		<p role="alert">{error}</p>
-	{/if}
-{:else}
-	<p><a href={resolve('/login')}>Sign in</a> to shorten links.</p>
+{#if recent.length}
+	<section class="mt-7 flex flex-col gap-3 px-1.25">
+		<h2 class="text-xl font-medium">ลิงก์ที่สร้างล่าสุด</h2>
+		{#each recent as link (link.code)}
+			<LinkCard {...link} onqr={() => showQr(link, 'QR Code')} />
+		{/each}
+	</section>
+{/if}
+
+{#if dialog}
+	<LinkQrDialog
+		bind:open={dialogOpen}
+		title={dialog.title}
+		url={shortUrl(dialog.link.code)}
+		code={dialog.link.code}
+	/>
 {/if}
