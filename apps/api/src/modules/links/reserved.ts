@@ -8,6 +8,8 @@ const RESERVED = new Set([
   // apps/web routes and SvelteKit's build assets
   "api",
   "login",
+  "contact",
+  "banned",
   "logout",
   "_app",
   "app",
