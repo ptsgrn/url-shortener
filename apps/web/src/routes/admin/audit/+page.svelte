@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { api, type AuditEntry } from '#lib/api.ts';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { errorMessage } from '#lib/errors.ts';
 	import { PAGE_SIZE, timeAgo } from '#lib/links.ts';
 	import { toast } from 'svelte-sonner';
@@ -27,10 +29,19 @@
 		'rule.delete': 'ลบกฎ'
 	};
 
+	const targetTypes = { user: 'บัญชี', link: 'ลิงก์', rule: 'กฎโดเมน' } as const;
+
 	const actorName = (entry: AuditEntry) => {
 		const actor = entry.actor as { name?: string | null; email?: string | null } | null;
 		return actor?.name ?? actor?.email ?? 'ไม่ทราบ';
 	};
+
+	/** The current URL without one search param, for clearing a filter chip. */
+	function without(name: string) {
+		const url = new URL(page.url.href);
+		url.searchParams.delete(name);
+		return `${url.pathname}${url.search}`;
+	}
 
 	/** What the API recorded about the target; links carry `code`, rules `pattern`. */
 	type Details = { code?: string; pattern?: string; name?: string | null; email?: string | null };
@@ -41,7 +52,14 @@
 	async function loadMore() {
 		loadingMore = true;
 		const res = await api.v1.admin.audit.get({
-			query: { offset: entries.length, limit: PAGE_SIZE }
+			query: {
+				action: data.filters.action ?? undefined,
+				targetType: data.filters.targetType ?? undefined,
+				actorId: data.filters.actorId ?? undefined,
+				targetId: data.filters.targetId ?? undefined,
+				offset: entries.length,
+				limit: PAGE_SIZE
+			}
 		});
 		loadingMore = false;
 		if (res.error) {
@@ -58,6 +76,55 @@
 </svelte:head>
 
 <h1 class="pl-4 text-[32px] leading-tight font-medium">ประวัติการดำเนินการ</h1>
+
+<form method="GET" class="mt-4 flex flex-wrap gap-2 pr-9 pl-3">
+	{#if data.filters.actorId}<input type="hidden" name="actor" value={data.filters.actorId} />{/if}
+	{#if data.filters.targetId}<input
+			type="hidden"
+			name="target"
+			value={data.filters.targetId}
+		/>{/if}
+	<select
+		name="action"
+		value={data.filters.action ?? ''}
+		aria-label="การดำเนินการ"
+		class="h-8 min-w-0 flex-1 rounded-md border border-input bg-card px-2 text-sm"
+	>
+		<option value="">ทุกการดำเนินการ</option>
+		{#each Object.entries(actions) as [value, label] (value)}
+			<option {value}>{label}</option>
+		{/each}
+	</select>
+	<select
+		name="type"
+		value={data.filters.targetType ?? ''}
+		aria-label="ประเภท"
+		class="h-8 rounded-md border border-input bg-card px-2 text-sm"
+	>
+		<option value="">ทุกประเภท</option>
+		{#each Object.entries(targetTypes) as [value, label] (value)}
+			<option {value}>{label}</option>
+		{/each}
+	</select>
+	<Button type="submit" size="sm">กรอง</Button>
+</form>
+
+{#if data.filters.actorId || data.filters.targetId}
+	<div class="mt-2 flex flex-wrap gap-2 pr-9 pl-3 text-sm">
+		<!-- eslint-disable svelte/no-navigation-without-resolve -- same page, fewer params -->
+		{#if data.filters.actorId}
+			<a href={without('actor')} class="rounded-md bg-muted px-2">
+				โดย {data.actorName ?? 'ผู้ดูแลที่เลือก'} ✕
+			</a>
+		{/if}
+		{#if data.filters.targetId}
+			<a href={without('target')} class="rounded-md bg-muted px-2">
+				กับ {data.targetName ?? 'รายการที่เลือก'} ✕
+			</a>
+		{/if}
+		<!-- eslint-enable svelte/no-navigation-without-resolve -->
+	</div>
+{/if}
 
 <ol class="mt-5 flex flex-col gap-3 pr-9 pl-3">
 	{#each entries as entry (entry.id)}
@@ -81,7 +148,7 @@
 						ลิงก์
 					{/if}
 				{:else if entry.targetType === 'user'}
-					<a href={resolve(`/admin/links?owner=${entry.targetId}`)} class="text-brand">
+					<a href={resolve('/admin/users/[id]', { id: entry.targetId })} class="text-brand">
 						{details(entry).name ?? details(entry).email ?? 'ผู้ใช้'}
 					</a>
 				{:else}
