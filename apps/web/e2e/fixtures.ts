@@ -1,6 +1,24 @@
-import { test as base, expect } from '@playwright/test';
+import { test as base, expect, request, type APIRequestContext } from '@playwright/test';
 
 type Role = 'user' | 'admin';
+
+/**
+ * Whitelists a domain pattern (e.g. `*.example.com`), signing in as a new
+ * admin in a separate context. Links are blocked unless their host matches a
+ * whitelist rule, and a fresh database has none.
+ */
+export async function allowDomain(baseURL: string, pattern: string) {
+	const admin: APIRequestContext = await request.newContext({ baseURL });
+	try {
+		const signIn = await admin.post('/api/dev/users', { data: { role: 'admin' } });
+		expect(signIn.ok(), 'dev sign-in needs DEV_TOOLS=true in .dev.vars').toBeTruthy();
+		const res = await admin.post('/api/v1/rules', { data: { list: 'whitelist', pattern } });
+		// 409: already whitelisted by an earlier run.
+		expect([201, 409]).toContain(res.status());
+	} finally {
+		await admin.dispose();
+	}
+}
 
 export const test = base.extend<{
 	signIn: (role?: Role) => Promise<{ id: string; name: string }>;

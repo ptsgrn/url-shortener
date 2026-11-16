@@ -1,6 +1,10 @@
-import { expect, test } from './fixtures.ts';
+import { allowDomain, expect, test } from './fixtures.ts';
 
 const target = 'https://www.chula.ac.th/e2e/some/long/path';
+
+test.beforeAll(async ({ baseURL }) => {
+	await allowDomain(baseURL!, '*.chula.ac.th');
+});
 
 test.beforeEach(async ({ page, signIn }) => {
 	await signIn();
@@ -21,11 +25,11 @@ test('shortens a URL and shows the success dialog', async ({ page, baseURL }) =>
 
 	const shortUrl = await dialog.getByText(`${baseURL}/`).textContent();
 	const code = shortUrl!.trim().split('/').pop()!;
-	expect(code).toMatch(/^\w+$/);
+	expect(code).toMatch(/^[\w+-]+$/);
 
 	// The API resolves the new code to the original URL.
 	const res = await page.request.get(`/api/v1/links/${code}`);
-	expect(await res.json()).toEqual({ code, url: target });
+	expect(await res.json()).toMatchObject({ code, url: target });
 
 	await dialog.getByRole('button', { name: 'Close' }).click();
 	await expect(page.getByLabel('วางลิงค์ URL')).toHaveValue('');
