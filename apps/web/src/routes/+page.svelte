@@ -56,7 +56,7 @@
 
 <form onsubmit={shorten} class="flex flex-col">
 	<h1 class="text-center text-[40px] leading-tight font-semibold">
-		<label for="url">วางลิงค์ URL</label>
+		<label for="url">วางลิงก์ URL</label>
 	</h1>
 	<input
 		id="url"
@@ -67,7 +67,7 @@
 		class="mt-5 h-11 rounded-md border border-input bg-card px-5 text-[15px] placeholder:text-[#979797]"
 	/>
 
-	<label for="code" class="mt-5 text-xl">ลิงค์ URL ใหม่</label>
+	<label for="code" class="mt-5 text-xl">ลิงก์ URL ใหม่</label>
 	<div class="mt-2 flex items-center">
 		<span class="text-xl">{displayUrl(shortUrl(''))}</span>
 		<input
@@ -84,7 +84,7 @@
 		type="submit"
 		disabled={submitting}
 		class="mt-8 h-17.5 rounded-md bg-primary text-5xl font-semibold hover:bg-primary/80 disabled:opacity-50"
-		>สร้างลิงค์</button
+		>สร้างลิงก์</button
 	>
 </form>
 

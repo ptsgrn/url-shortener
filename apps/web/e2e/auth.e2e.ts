@@ -18,7 +18,7 @@ test('dev sign-in panel creates a user and signs in', async ({ page }) => {
 	await page.getByRole('button', { name: 'Create and sign in' }).click();
 
 	await expect(page).toHaveURL('/');
-	await expect(page.getByRole('heading', { name: 'วางลิงค์ URL' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'วางลิงก์ URL' })).toBeVisible();
 });
 
 test('signed-in users skip login and can sign out from the menu', async ({ page, signIn }) => {

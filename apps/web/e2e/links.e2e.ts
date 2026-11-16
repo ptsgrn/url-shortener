@@ -13,8 +13,8 @@ test.beforeEach(async ({ page, signIn }) => {
 });
 
 test('shortens a URL and shows the success dialog', async ({ page, baseURL }) => {
-	await page.getByLabel('วางลิงค์ URL').fill(target);
-	await page.getByRole('button', { name: 'สร้างลิงค์' }).click();
+	await page.getByLabel('วางลิงก์ URL').fill(target);
+	await page.getByRole('button', { name: 'สร้างลิงก์' }).click();
 
 	const dialog = await settled(page.getByRole('dialog'));
 	await expect(dialog.getByRole('heading', { name: 'สร้างลิงก์สำเร็จ!' })).toBeVisible();
@@ -33,14 +33,14 @@ test('shortens a URL and shows the success dialog', async ({ page, baseURL }) =>
 	expect(await res.json()).toMatchObject({ code, url: target });
 
 	await dialog.getByRole('button', { name: 'Close' }).click();
-	await expect(page.getByLabel('วางลิงค์ URL')).toHaveValue('');
+	await expect(page.getByLabel('วางลิงก์ URL')).toHaveValue('');
 	const card = page.getByRole('article').filter({ hasText: code });
 	await expect(card).toContainText(target);
 });
 
 test('copies the short link', async ({ page, baseURL }) => {
-	await page.getByLabel('วางลิงค์ URL').fill(target);
-	await page.getByRole('button', { name: 'สร้างลิงค์' }).click();
+	await page.getByLabel('วางลิงก์ URL').fill(target);
+	await page.getByRole('button', { name: 'สร้างลิงก์' }).click();
 
 	const dialog = await settled(page.getByRole('dialog'));
 	const shortUrl = (await dialog.getByText(`${baseURL}/`).textContent())!.trim();
@@ -51,8 +51,8 @@ test('copies the short link', async ({ page, baseURL }) => {
 });
 
 test('reopens the QR code from a recent link', async ({ page }) => {
-	await page.getByLabel('วางลิงค์ URL').fill(target);
-	await page.getByRole('button', { name: 'สร้างลิงค์' }).click();
+	await page.getByLabel('วางลิงก์ URL').fill(target);
+	await page.getByRole('button', { name: 'สร้างลิงก์' }).click();
 	await (await settled(page.getByRole('dialog'))).getByRole('button', { name: 'Close' }).click();
 
 	await page.getByRole('article').getByRole('button', { name: 'qrcode' }).click();
@@ -61,9 +61,9 @@ test('reopens the QR code from a recent link', async ({ page }) => {
 });
 
 async function create(page: Page, code?: string) {
-	await page.getByLabel('วางลิงค์ URL').fill(target);
-	if (code) await page.getByLabel('ลิงค์ URL ใหม่').fill(code);
-	await page.getByRole('button', { name: 'สร้างลิงค์' }).click();
+	await page.getByLabel('วางลิงก์ URL').fill(target);
+	if (code) await page.getByLabel('ลิงก์ URL ใหม่').fill(code);
+	await page.getByRole('button', { name: 'สร้างลิงก์' }).click();
 	await expect(page.getByRole('heading', { name: 'สร้างลิงก์สำเร็จ!' })).toBeVisible();
 	await (await settled(page.getByRole('dialog'))).getByRole('button', { name: 'Close' }).click();
 }
@@ -75,9 +75,9 @@ test('creates a link with a custom code, and refuses a taken one', async ({ page
 	await create(page, code);
 	await expect(page.getByRole('article').filter({ hasText: `/${code}` })).toBeVisible();
 
-	await page.getByLabel('วางลิงค์ URL').fill(target);
-	await page.getByLabel('ลิงค์ URL ใหม่').fill(code);
-	await page.getByRole('button', { name: 'สร้างลิงค์' }).click();
+	await page.getByLabel('วางลิงก์ URL').fill(target);
+	await page.getByLabel('ลิงก์ URL ใหม่').fill(code);
+	await page.getByRole('button', { name: 'สร้างลิงก์' }).click();
 	await expect(page.getByText('ชื่อลิงก์นี้ถูกใช้แล้ว ลองชื่ออื่น')).toBeVisible();
 });
 
