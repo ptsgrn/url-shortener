@@ -20,6 +20,9 @@
 	"workers_dev": true,
 	"preview_urls": true,
 	"observability": {
-		"enabled": true
+		"logs": {
+			"enabled": false,
+			"invocation_logs": true
+		}
 	}
 }
