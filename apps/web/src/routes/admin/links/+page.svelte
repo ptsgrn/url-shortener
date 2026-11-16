@@ -19,7 +19,7 @@
 	$effect(() => {
 		links = data.links;
 		hasMore = data.links.length === PAGE_SIZE;
-		if (data.filters.q || data.filters.status) showFilter = true;
+		if (data.filters.q || data.filters.status || data.filters.deleted) showFilter = true;
 	});
 
 	const statuses = [
@@ -39,12 +39,13 @@
 
 	async function loadMore() {
 		loadingMore = true;
-		const { q, status, ownerId } = data.filters;
+		const { q, status, ownerId, deleted } = data.filters;
 		const res = await api.v1.admin.links.get({
 			query: {
 				q: q || undefined,
 				status: status ?? undefined,
 				ownerId,
+				deleted: deleted || undefined,
 				offset: links.length,
 				limit: PAGE_SIZE
 			}
@@ -103,6 +104,10 @@
 				<option {value}>{label}</option>
 			{/each}
 		</select>
+		<label class="flex items-center gap-1.5 text-sm">
+			<input type="checkbox" name="deleted" value="1" checked={data.filters.deleted} />
+			ดูเฉพาะลิงก์ที่ลบแล้ว
+		</label>
 		<Button type="submit" size="sm">ค้นหา</Button>
 	</form>
 {/if}
