@@ -7,7 +7,16 @@
 	let { open = $bindable(false), code }: { open?: boolean; code: string } = $props();
 
 	const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-	const DAYS = 14;
+	/** Ranges in days ending today; `null` is all time (the chart then shows the last 30 days). */
+	const ranges = [
+		{ days: 7, label: '7 วัน' },
+		{ days: 30, label: '30 วัน' },
+		{ days: 90, label: '90 วัน' },
+		{ days: null, label: 'ทั้งหมด' }
+	] as const;
+	// Raw, not a proxy: the buttons compare it with `ranges` by identity.
+	let range = $state.raw<(typeof ranges)[number]>(ranges[1]);
+	const chartDays = $derived(range.days ?? 30);
 
 	let stats = $state<Stats | null>(null);
 	let failed = $state<string | null>(null);
@@ -16,9 +25,10 @@
 		if (!open) return;
 		stats = null;
 		failed = null;
+		const from = range.days ? day(1 - range.days) : undefined;
 		api.v1
 			.stats({ code })
-			.get({ query: { tz: timeZone } })
+			.get({ query: { tz: timeZone, from } })
 			.then((res) => (res.error ? (failed = errorMessage(res.error)) : (stats = res.data)));
 	});
 
@@ -29,8 +39,8 @@
 	// `daily` only lists days with visits; the chart shows every recent day.
 	const days = $derived.by(() => {
 		const counts = new Map(stats?.daily.map((d) => [d.date, d.count]));
-		return Array.from({ length: DAYS }, (_, i) => {
-			const date = day(i - DAYS + 1);
+		return Array.from({ length: chartDays }, (_, i) => {
+			const date = day(i - chartDays + 1);
 			return { date, count: counts.get(date) ?? 0 };
 		});
 	});
@@ -53,13 +63,24 @@
 	<Dialog.Content class="max-h-[90dvh] overflow-y-auto rounded-md border border-brand sm:max-w-95">
 		<Dialog.Title class="text-xl">สถิติการเข้าชม /{code}</Dialog.Title>
 
+		<div role="group" aria-label="ช่วงเวลา" class="flex gap-1 rounded-md bg-muted p-1 text-sm">
+			{#each ranges as r (r.label)}
+				<button
+					type="button"
+					aria-pressed={range === r}
+					class="flex-1 rounded-sm py-1 aria-pressed:bg-card aria-pressed:font-medium"
+					onclick={() => (range = r)}>{r.label}</button
+				>
+			{/each}
+		</div>
+
 		{#if failed}
 			<p role="alert" class="text-destructive">{failed}</p>
 		{:else if !stats}
 			<p class="text-muted-foreground">กำลังโหลด…</p>
 		{:else}
 			<div class="grid grid-cols-2 gap-3">
-				{#each [{ name: 'การเข้าชมวันนี้', n: today }, { name: 'การเข้าชมทั้งหมด', n: stats.total }] as tile (tile.name)}
+				{#each [{ name: 'การเข้าชมวันนี้', n: today }, { name: range.days ? `การเข้าชม ${range.label}` : 'การเข้าชมทั้งหมด', n: stats.total }] as tile (tile.name)}
 					<div class="flex flex-col rounded-md bg-primary px-3 py-2">
 						<span class="text-sm font-medium">{tile.name}</span>
 						<span class="text-right text-4xl leading-tight tabular-nums">
@@ -70,7 +91,7 @@
 			</div>
 
 			<section class="flex flex-col gap-1.5">
-				<h3 class="text-sm font-medium">การเข้าชม {DAYS} วันล่าสุด</h3>
+				<h3 class="text-sm font-medium">การเข้าชม {chartDays} วันล่าสุด</h3>
 				<div
 					class="flex h-24 items-end gap-0.5 border-b border-muted-foreground/40"
 					aria-hidden="true"
@@ -90,7 +111,7 @@
 				<div class="flex justify-between text-[10px] text-muted-foreground" aria-hidden="true">
 					<span>{label(days[0].date)}</span>
 					<span>สูงสุด {max === 1 && !days.some((d) => d.count) ? 0 : max} ครั้ง/วัน</span>
-					<span>{label(days[DAYS - 1].date)}</span>
+					<span>{label(days[chartDays - 1].date)}</span>
 				</div>
 				<details class="text-xs">
 					<summary class="cursor-pointer text-muted-foreground">ดูเป็นตาราง</summary>
