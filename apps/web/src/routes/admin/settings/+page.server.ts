@@ -1,8 +1,17 @@
-import { apiFor } from '#lib/api.ts';
+import { apiFor, type Rule } from '#lib/api.ts';
 import { unwrap } from '#lib/errors.ts';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ url, fetch }) => ({
-	// 100 is the API's page limit; more rules than that would need paging here.
-	rules: unwrap(await apiFor(fetch, url.origin).v1.rules.get({ query: { limit: 100 } }))
-});
+/** The API's largest page of rules. */
+const LIMIT = 100;
+
+export const load: PageServerLoad = async ({ url, fetch }) => {
+	const api = apiFor(fetch, url.origin);
+	// The editor saves whole lists, so it needs every rule, not one page.
+	const rules: Rule[] = [];
+	for (;;) {
+		const page = unwrap(await api.v1.rules.get({ query: { offset: rules.length, limit: LIMIT } }));
+		rules.push(...page);
+		if (page.length < LIMIT) return { rules };
+	}
+};

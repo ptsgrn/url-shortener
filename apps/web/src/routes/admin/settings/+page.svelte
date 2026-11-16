@@ -91,7 +91,7 @@
 </p>
 
 {#each ['whitelist', 'blacklist'] as const as list (list)}
-	<section class="mt-6 pr-9 pl-3">
+	<section class="mt-6 pr-9 pl-3" aria-label={list}>
 		<div class="flex items-center justify-between">
 			<h2 class="text-xl font-medium capitalize">{list}</h2>
 			<button
