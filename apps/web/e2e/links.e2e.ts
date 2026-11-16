@@ -144,6 +144,30 @@ test('shows visit stats', async ({ page }) => {
 
 	const dialog = await settled(page.getByRole('dialog'));
 	await expect(dialog.getByRole('heading', { name: `สถิติการเข้าชม /${code}` })).toBeVisible();
-	await expect(dialog.getByText('การเข้าชมทั้งหมด').locator('..')).toContainText('1');
+	await expect(dialog.getByText('การเข้าชม 30 วัน', { exact: true }).locator('..')).toContainText(
+		'1'
+	);
 	await expect(dialog.getByText('แบ่งตามอุปกรณ์')).toBeVisible();
+});
+
+test('switches the stats range', async ({ page }) => {
+	const code = uniqueCode();
+	await create(page, code);
+	await page
+		.getByRole('article')
+		.filter({ hasText: `/${code}` })
+		.getByRole('button', { name: 'สถิติการเข้าชม' })
+		.click();
+
+	const dialog = await settled(page.getByRole('dialog'));
+	await expect(dialog.getByText('การเข้าชม 30 วัน', { exact: true })).toBeVisible();
+	await dialog.getByRole('button', { name: '7 วัน' }).click();
+	await expect(dialog.getByRole('button', { name: '7 วัน' })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await expect(dialog.getByText('การเข้าชม 7 วัน', { exact: true })).toBeVisible();
+	await expect(dialog.getByRole('heading', { name: 'การเข้าชม 7 วันล่าสุด' })).toBeVisible();
+	await dialog.getByRole('button', { name: 'ทั้งหมด' }).click();
+	await expect(dialog.getByText('การเข้าชมทั้งหมด', { exact: true })).toBeVisible();
 });
