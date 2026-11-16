@@ -1,8 +1,13 @@
 import { page } from '$app/state';
 import { toast } from 'svelte-sonner';
 
-// No redirect route or custom short domain yet, so short links live on this origin.
 export const shortUrl = (code: string) => `${page.url.origin}/${code}`;
+
+/** Links per page in every list (the API's `limit`). */
+export const PAGE_SIZE = 20;
+
+/** Short codes as the API accepts them, for an input's `pattern` (`v`-flag syntax). */
+export const CODE_PATTERN = String.raw`[A-Za-z0-9+_\-]{3,32}`;
 
 export const displayUrl = (url: string) => url.replace(/^https?:\/\//, '');
 

@@ -1,61 +1,56 @@
 <script lang="ts">
-	import { api } from '#lib/api.ts';
-	import LinkCard from '#lib/components/LinkCard.svelte';
+	import { invalidateAll } from '$app/navigation';
+	import { api, type Link } from '#lib/api.ts';
+	import LinkList from '#lib/components/LinkList.svelte';
 	import LinkQrDialog from '#lib/components/LinkQrDialog.svelte';
-	import { displayUrl, shortUrl } from '#lib/links.ts';
-	import { AuthError, InternalError, LinkError } from 'api/errors';
+	import { errorMessage } from '#lib/errors.ts';
+	import { CODE_PATTERN, PAGE_SIZE, displayUrl, shortUrl } from '#lib/links.ts';
 	import { toast } from 'svelte-sonner';
+	import type { PageProps } from './$types';
 
-	type Link = { code: string; url: string; createdAt: Date };
+	let { data }: PageProps = $props();
 
 	let url = $state('');
-	let customCode = $state('');
+	let code = $state('');
 	let submitting = $state(false);
-	// There is no "list my links" endpoint yet, so this only holds links made in this tab.
-	let recent = $state<Link[]>([]);
-	let dialog = $state<{ link: Link; title: string } | null>(null);
-	let dialogOpen = $state(false);
 
-	const errors: Record<
-		| AuthError.Unauthorized
-		| AuthError.Forbidden
-		| LinkError.Blocked
-		| LinkError.CodeTaken
-		| InternalError,
-		string
-	> = {
-		[AuthError.Unauthorized]: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง',
-		[AuthError.Forbidden]: 'บัญชีของคุณถูกระงับ จึงสร้างลิงก์ไม่ได้',
-		[LinkError.Blocked]: 'ไม่อนุญาตให้สร้างลิงก์ไปยังเว็บไซต์นี้',
-		[LinkError.CodeTaken]: 'ชื่อลิงก์นี้ถูกใช้แล้ว ลองชื่ออื่น',
-		[InternalError.Database]: 'เกิดข้อผิดพลาด กรุณาลองใหม่',
-		[InternalError.Crypto]: 'เกิดข้อผิดพลาด กรุณาลองใหม่'
-	};
+	let links = $state<Link[]>([]);
+	let hasMore = $state(false);
+	let loadingMore = $state(false);
+	$effect(() => {
+		links = data.links;
+		hasMore = data.links.length === PAGE_SIZE;
+	});
 
-	function showQr(link: Link, title: string) {
-		dialog = { link, title };
-		dialogOpen = true;
-	}
+	let created = $state<string | null>(null);
+	let createdOpen = $state(false);
 
 	async function shorten(event: SubmitEvent) {
 		event.preventDefault();
-		if (customCode) {
-			toast.error('ยังไม่รองรับการตั้งชื่อลิงก์เอง เว้นว่างไว้เพื่อสุ่มลิงก์');
-			return;
-		}
 		submitting = true;
-		const res = await api.v1.links.post({ url });
+		const res = await api.v1.links.post({ url, ...(code && { code }) });
 		submitting = false;
 		if (res.error) {
-			toast.error(
-				res.error.status === 422 ? 'กรุณาใส่ URL ที่ถูกต้อง' : errors[res.error.value.error]
-			);
+			toast.error(errorMessage(res.error));
 			return;
 		}
-		const link = { ...res.data, createdAt: new Date() };
-		recent = [link, ...recent];
 		url = '';
-		showQr(link, 'สร้างลิงก์สำเร็จ!');
+		code = '';
+		created = res.data.code;
+		createdOpen = true;
+		await invalidateAll();
+	}
+
+	async function loadMore() {
+		loadingMore = true;
+		const res = await api.v1.links.get({ query: { offset: links.length, limit: PAGE_SIZE } });
+		loadingMore = false;
+		if (res.error) {
+			toast.error(errorMessage(res.error));
+			return;
+		}
+		links = [...links, ...res.data];
+		hasMore = res.data.length === PAGE_SIZE;
 	}
 </script>
 
@@ -77,7 +72,9 @@
 		<span class="text-xl">{displayUrl(shortUrl(''))}</span>
 		<input
 			id="code"
-			bind:value={customCode}
+			bind:value={code}
+			pattern={CODE_PATTERN}
+			title="3–32 ตัวอักษร: A–Z a–z 0–9 - + _"
 			placeholder="เว้นว่างเพื่อสุ่มลิงก์อัตโนมัติ"
 			class="h-5 min-w-0 flex-1 rounded-sm bg-muted px-2 text-xs placeholder:text-foreground/60"
 		/>
@@ -91,20 +88,24 @@
 	>
 </form>
 
-{#if recent.length}
-	<section class="mt-7 flex flex-col gap-3 px-1.25">
-		<h2 class="text-xl font-medium">ลิงก์ที่สร้างล่าสุด</h2>
-		{#each recent as link (link.code)}
-			<LinkCard {...link} onqr={() => showQr(link, 'QR Code')} />
-		{/each}
-	</section>
-{/if}
+<section class="mt-7 flex flex-col gap-3 px-1.25">
+	<h2 class="text-xl font-medium">ลิงก์ที่สร้างล่าสุด</h2>
+	<LinkList bind:links empty="ยังไม่มีลิงก์ ลองสร้างลิงก์แรกด้านบน" />
+	{#if hasMore}
+		<button
+			type="button"
+			class="self-center text-sm text-brand"
+			disabled={loadingMore}
+			onclick={loadMore}>ดูเพิ่มเติม</button
+		>
+	{/if}
+</section>
 
-{#if dialog}
+{#if created}
 	<LinkQrDialog
-		bind:open={dialogOpen}
-		title={dialog.title}
-		url={shortUrl(dialog.link.code)}
-		code={dialog.link.code}
+		bind:open={createdOpen}
+		title="สร้างลิงก์สำเร็จ!"
+		url={shortUrl(created)}
+		code={created}
 	/>
 {/if}
