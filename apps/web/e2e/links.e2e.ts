@@ -1,5 +1,7 @@
 import type { Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { allowDomain, expect, settled, test } from './fixtures.ts';
+import { decodeQr, decodeQrDataUrl } from './qr.ts';
 
 const target = 'https://www.chula.ac.th/e2e/some/long/path';
 
@@ -170,4 +172,88 @@ test('switches the stats range', async ({ page }) => {
 	await expect(dialog.getByRole('heading', { name: 'การเข้าชม 7 วันล่าสุด' })).toBeVisible();
 	await dialog.getByRole('button', { name: 'ทั้งหมด' }).click();
 	await expect(dialog.getByText('การเข้าชมทั้งหมด', { exact: true })).toBeVisible();
+});
+
+/** Creates a link through the form and returns its short URL from the success dialog. */
+async function createAndRead(page: Page, baseURL: string, code?: string) {
+	await page.getByLabel('วางลิงก์ URL').fill(target);
+	if (code) await page.getByLabel('ลิงก์ URL ใหม่').fill(code);
+	await page.getByRole('button', { name: 'สร้างลิงก์' }).click();
+	const dialog = await settled(page.getByRole('dialog'));
+	const shortUrl = (await dialog.getByText(`${baseURL}/`).textContent())!.trim();
+	return { dialog, shortUrl, code: shortUrl.slice(`${baseURL}/`.length) };
+}
+
+test('FR-10: the downloaded QR code encodes the short link, not the destination', async ({
+	page,
+	baseURL
+}) => {
+	const { dialog, shortUrl, code } = await createAndRead(page, baseURL!);
+
+	const shown = await dialog.getByRole('img', { name: /QR code for/ }).getAttribute('src');
+	expect(decodeQrDataUrl(shown!)).toBe(shortUrl);
+
+	const [download] = await Promise.all([
+		page.waitForEvent('download'),
+		dialog.getByRole('link', { name: 'ดาวน์โหลด QR Code' }).click()
+	]);
+	expect(download.suggestedFilename()).toBe(`microl-${code}.png`);
+	const png = await readFile(await download.path());
+	expect(png.subarray(1, 4).toString()).toBe('PNG');
+	const decoded = decodeQr(png);
+	expect(decoded).toBe(shortUrl);
+	expect(decoded).not.toBe(target);
+});
+
+test('FR-10: the QR code from a recent link encodes that link', async ({ page, baseURL }) => {
+	const code = uniqueCode();
+	await create(page, code);
+	await page
+		.getByRole('article')
+		.filter({ hasText: `/${code}` })
+		.getByRole('button', { name: 'qrcode' })
+		.click();
+
+	const dialog = await settled(page.getByRole('dialog'));
+	const src = await dialog.getByRole('img', { name: /QR code for/ }).getAttribute('src');
+	expect(decodeQrDataUrl(src!)).toBe(`${baseURL}/${code}`);
+});
+
+test('FR-05: generates a random code when none is given', async ({ page, baseURL }) => {
+	const codes: string[] = [];
+	for (let i = 0; i < 2; i++) {
+		const { dialog, code } = await createAndRead(page, baseURL!);
+		codes.push(code);
+		await dialog.getByRole('button', { name: 'Close' }).click();
+	}
+
+	for (const code of codes) expect(code).toMatch(/^[A-Za-z0-9_-]{7}$/);
+	expect(codes[0]).not.toBe(codes[1]);
+
+	const res = await page.request.get(`/${codes[0]}`, { maxRedirects: 0 });
+	expect(res.status()).toBe(302);
+	expect(res.headers().location).toBe(target);
+});
+
+test('FR-06: pages through many links with "ดูเพิ่มเติม"', async ({ page }) => {
+	const total = 25;
+	const created = await Promise.all(
+		Array.from({ length: total }, async (_, i) => {
+			const res = await page.request.post('/api/v1/links', { data: { url: `${target}/${i}` } });
+			expect(res.ok()).toBeTruthy();
+			return ((await res.json()) as { code: string }).code;
+		})
+	);
+	await page.goto('/');
+
+	const cards = page.getByRole('article');
+	const more = page.getByRole('button', { name: 'ดูเพิ่มเติม' });
+	await expect(cards).toHaveCount(20);
+	await more.click();
+	await expect(cards).toHaveCount(total);
+	await expect(more).toHaveCount(0);
+
+	// Every link exactly once across both pages.
+	const shown = (await cards.allTextContents()).map((text) => text.match(/\/([\w-]{7})/)?.[1]);
+	expect(new Set(shown)).toEqual(new Set(created));
 });
