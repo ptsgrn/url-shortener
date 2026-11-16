@@ -46,23 +46,19 @@ describe("FR-01 / FR-15: suspended accounts can't manage links", () => {
     expect(res.status).toBe(401);
   });
 
-  test.todo(
-    "FR-07/08/10/11: edit, enable, QR and stats are refused too",
-    async () => {
-      const api = linkApi(t.h);
-      const { code } = await createLink(t.h, t.owner, "https://example.com");
-      await ok(api.details(code, t.owner)); // control
-      await banUser(t.h, t.owner.id);
-      for (const res of [
-        await api.details(code, t.owner),
-        await api.update(code, t.owner, { url: "https://example.com/new" }),
-        await api.update(code, t.owner, { active: false }),
-        await api.qr(code, t.owner),
-        await api.stats(code, t.owner),
-      ])
-        expect(res.status).toBe(403);
-    },
-  );
+  test.todo("FR-07/08/11: edit, enable and stats are refused too", async () => {
+    const api = linkApi(t.h);
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    await ok(api.details(code, t.owner)); // control
+    await banUser(t.h, t.owner.id);
+    for (const res of [
+      await api.details(code, t.owner),
+      await api.update(code, t.owner, { url: "https://example.com/new" }),
+      await api.update(code, t.owner, { active: false }),
+      await api.stats(code, t.owner),
+    ])
+      expect(res.status).toBe(403);
+  });
 });
 
 describe("FR-03: users only see and manage links they hold", () => {
@@ -78,7 +74,7 @@ describe("FR-03: users only see and manage links they hold", () => {
   });
 
   test.todo(
-    "another user gets 404 and no data for details, edit, QR and stats",
+    "another user gets 404 and no data for details, edit and stats",
     async () => {
       const api = linkApi(t.h);
       const { code } = await createLink(
@@ -91,7 +87,6 @@ describe("FR-03: users only see and manage links they hold", () => {
         await api.details(code, t.other),
         await api.update(code, t.other, { url: "https://example.com/hijack" }),
         await api.update(code, t.other, { active: false }),
-        await api.qr(code, t.other),
         await api.stats(code, t.other),
       ]) {
         expect(res.status).toBe(404);
@@ -115,7 +110,6 @@ describe("FR-03: users only see and manage links they hold", () => {
       for (const res of [
         await api.details(code),
         await api.update(code, undefined, { active: false }),
-        await api.qr(code),
         await api.stats(code),
       ])
         expect(res.status).toBe(401);

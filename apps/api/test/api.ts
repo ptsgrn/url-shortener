@@ -51,9 +51,6 @@ export const linkApi = (h: Harness) => ({
     as: TestUser | undefined,
     body: { url?: string; active?: boolean; userId?: string; code?: string },
   ) => h.request("PATCH", `/v1/links/${code}`, { as, body }),
-  /** FR-10 */
-  qr: (code: string, as?: TestUser) =>
-    h.request("GET", `/v1/links/${code}/qr`, { as }),
   /** FR-11. `from` / `to` are `YYYY-MM-DD`, inclusive. */
   stats: (
     code: string,
