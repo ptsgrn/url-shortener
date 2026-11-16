@@ -91,7 +91,10 @@
 	{#each users as user (user.id)}
 		<article class="flex flex-col gap-1 rounded-md bg-muted px-4 pt-3 pb-3 text-sm">
 			<div class="flex items-center gap-2">
-				<p class="truncate">{user.name ?? 'ไม่มีชื่อ'}</p>
+				<a
+					href={resolve('/admin/users/[id]', { id: user.id })}
+					class="truncate underline-offset-2 hover:underline">{user.name ?? 'ไม่มีชื่อ'}</a
+				>
 				{#if user.role === 'admin'}
 					<span class="rounded-sm bg-primary px-1.5 text-[10px]">ผู้ดูแล</span>
 				{/if}
