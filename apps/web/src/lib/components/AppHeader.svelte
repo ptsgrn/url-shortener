@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { dev } from '$app/env';
 	import { resolve } from '$app/paths';
 	import logo from '#lib/assets/logo.svg';
 	import { logout } from '#lib/auth.ts';
@@ -38,8 +37,7 @@
 			<nav class="flex flex-col gap-1 px-4 text-lg">
 				{#if user}
 					<a href={resolve('/')} class={item} onclick={() => (open = false)}>สร้างลิงก์</a>
-					<!-- Admin pages are dev-only previews until the API exposes user roles. -->
-					{#if dev}
+					{#if user.role === 'admin'}
 						<a href={resolve('/admin')} class={item} onclick={() => (open = false)}>ผู้ดูแลระบบ</a>
 					{/if}
 				{:else}

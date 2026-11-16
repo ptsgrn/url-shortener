@@ -12,4 +12,5 @@
 	<Button href={resolve('/admin/links')} size="xl">รายการลิงก์ทั้งหมด</Button>
 	<Button href={resolve('/admin/users')} size="xl">บัญชีผู้ใช้</Button>
 	<Button href={resolve('/admin/settings')} size="xl">การตั้งค่า</Button>
+	<Button href={resolve('/admin/audit')} size="xl">ประวัติการดำเนินการ</Button>
 </nav>
