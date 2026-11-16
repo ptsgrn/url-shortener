@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { api, type AdminLink, type Link } from '#lib/api.ts';
+	import { api, type AdminLink, type AdminUser, type Link } from '#lib/api.ts';
+	import ChangeOwnerDialog from '#lib/components/ChangeOwnerDialog.svelte';
 	import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
 	import EditLinkDialog from '#lib/components/EditLinkDialog.svelte';
 	import LinkCard from '#lib/components/LinkCard.svelte';
@@ -17,14 +18,15 @@
 		empty = 'ยังไม่มีลิงก์'
 	}: { links: Item[]; admin?: boolean; empty?: string } = $props();
 
-	type Open = 'edit' | 'delete' | 'ban' | 'stats' | 'qr';
+	type Open = 'edit' | 'delete' | 'ban' | 'stats' | 'qr' | 'owner';
 	let current = $state<Item | null>(null);
 	const open = $state<Record<Open, boolean>>({
 		edit: false,
 		delete: false,
 		ban: false,
 		stats: false,
-		qr: false
+		qr: false,
+		owner: false
 	});
 
 	function show(dialog: Open, link: Item) {
@@ -64,6 +66,14 @@
 		toast.success('ลบลิงก์แล้ว');
 	}
 
+	async function changeOwner(user: AdminUser) {
+		const res = await api.v1.links({ code: current!.code }).patch({ userId: user.id });
+		if (res.error) return fail(res.error);
+		const owner = { id: user.id, name: user.name, email: user.email };
+		replace({ ...res.data, owner });
+		toast.success(`เปลี่ยนเจ้าของเป็น ${user.name ?? user.email} แล้ว`);
+	}
+
 	async function ban(reason: string) {
 		const target = api.v1.admin.links({ code: current!.code }).ban;
 		const res = current!.bannedAt ? await target.delete() : await target.post({ reason });
@@ -84,6 +94,7 @@
 			onstats={() => show('stats', link)}
 			onqr={() => show('qr', link)}
 			onban={() => show('ban', link)}
+			onowner={() => show('owner', link)}
 		/>
 	{:else}
 		<p class="py-8 text-center text-muted-foreground">{empty}</p>
@@ -108,6 +119,14 @@
 		onconfirm={ban}
 	/>
 	<StatsDialog bind:open={open.stats} code={current.code} />
+	{#if admin}
+		<ChangeOwnerDialog
+			bind:open={open.owner}
+			code={current.code}
+			currentOwnerId={current.userId}
+			onsave={changeOwner}
+		/>
+	{/if}
 	<LinkQrDialog
 		bind:open={open.qr}
 		title="QR Code"
