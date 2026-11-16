@@ -96,7 +96,8 @@ export const rules = (deps: Deps) =>
       "/:id",
       ({ params, user, status }) =>
         Rule.delete(deps.db, params.id, user.id).match(
-          () => status(204, undefined),
+          // Not `status(204, undefined)`: that sends a body, which workerd rejects on a 204.
+          () => new Response(null, { status: 204 }),
           fail(status),
         ),
       {

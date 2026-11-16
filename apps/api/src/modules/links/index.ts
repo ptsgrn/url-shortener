@@ -113,7 +113,8 @@ export const links = (deps: Deps) =>
       "/:code",
       ({ params, user, status }) =>
         Link.delete(deps.db, params.code, user.id).match(
-          () => status(204, undefined),
+          // Not `status(204, undefined)`: that sends a body, which workerd rejects on a 204.
+          () => new Response(null, { status: 204 }),
           fail(status),
         ),
       {
