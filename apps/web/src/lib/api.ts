@@ -22,3 +22,19 @@ const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
 export const api = treaty<App>(browser ? location.origin : 'http://localhost', {
 	fetcher: browser ? fetcher : undefined
 }).api;
+
+/**
+ * Client for load functions, over SvelteKit's `fetch` so the request carries
+ * the visitor's cookies (on the server it calls the `/api` route in-process).
+ */
+export const apiFor = (fetch: typeof globalThis.fetch, origin: string) =>
+	treaty<App>(origin, { fetcher: fetch }).api;
+
+type Data<T> = T extends (...args: never[]) => Promise<{ data: infer D }> ? NonNullable<D> : never;
+
+export type Link = Data<typeof api.v1.links.get>[number];
+export type AdminLink = Data<typeof api.v1.admin.links.get>[number];
+export type AdminUser = Data<typeof api.v1.admin.users.get>[number];
+export type Rule = Data<typeof api.v1.rules.get>[number];
+export type AuditEntry = Data<typeof api.v1.admin.audit.get>[number];
+export type Stats = Data<ReturnType<typeof api.v1.stats>['get']>;
