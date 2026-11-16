@@ -129,9 +129,9 @@ describe("FR-09: opening a short link", () => {
   });
 
   test("on Workers the visit is recorded after the response (waitUntil)", async () => {
-    const tasks: { request: Request; task: Promise<unknown> }[] = [];
+    const tasks: Promise<unknown>[] = [];
     const h = await createHarness({
-      waitUntil: (request, task) => tasks.push({ request, task }),
+      waitUntil: (task) => tasks.push(task),
     });
     const owner = await h.signIn();
     await allowAll(h, await h.signIn({ role: "admin" }));
@@ -140,9 +140,8 @@ describe("FR-09: opening a short link", () => {
     const res = await h.request("GET", `/v1/r/${code}`);
     expect(res.status).toBe(302);
     expect(tasks).toHaveLength(1);
-    expect(new URL(tasks[0]!.request.url).pathname).toBe(`/api/v1/r/${code}`);
 
-    await Promise.all(tasks.map((t) => t.task));
+    await Promise.all(tasks);
     const stats = await h.request("GET", `/v1/stats/${code}`, { as: owner });
     expect(stats.body.total).toBe(1);
   });

@@ -1,13 +1,12 @@
 import { error, redirect } from '@sveltejs/kit';
-import { app, requestContexts } from '#lib/server/app.ts';
+import { app } from '#lib/server/app.ts';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params, request, url, platform }) => {
+export const load: PageServerLoad = async ({ params, request, url }) => {
 	// Forward with the visitor's headers: stats read the user agent and referrer.
 	const forwarded = new Request(new URL(`/api/v1/r/${encodeURIComponent(params.code)}`, url), {
 		headers: request.headers
 	});
-	if (platform?.ctx) requestContexts.set(forwarded, platform.ctx);
 
 	const res = await app.handle(forwarded);
 	const location = res.headers.get('location');

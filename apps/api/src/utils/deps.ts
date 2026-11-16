@@ -19,13 +19,12 @@ export interface Deps {
   db: DB;
   env: AuthEnv;
   /**
-   * Keeps `task` running after the response for `request` is sent: on
-   * Workers, the request's `ctx.waitUntil`. The app is built once per
-   * isolate but `ctx` is per request, so the host looks it up by `request`
-   * (see `apps/web/src/lib/server/app.ts`). Omitted (Bun, tests): background
-   * work is awaited before responding instead.
+   * Keeps `task` running after the current response is sent: on Workers,
+   * `waitUntil` from `cloudflare:workers`, which applies to the request
+   * being handled (see `apps/web/src/lib/server/app.ts`). Omitted (Bun,
+   * tests): background work is awaited before responding instead.
    */
-  waitUntil?: (request: Request, task: Promise<unknown>) => void;
+  waitUntil?: (task: Promise<unknown>) => void;
 }
 
 /**
@@ -35,13 +34,12 @@ export interface Deps {
  */
 export const inBackground = (
   deps: Deps,
-  request: Request,
   task: ResultAsync<unknown, never>,
 ): ResultAsync<void, never> => {
   const done = (async () => {
     await task;
   })();
   if (!deps.waitUntil) return ResultAsync.fromSafePromise(done);
-  deps.waitUntil(request, done);
+  deps.waitUntil(done);
   return ResultAsync.fromSafePromise(Promise.resolve());
 };

@@ -8,12 +8,8 @@ declare global {
 		}
 		// interface PageData {}
 		// interface PageState {}
-		interface Platform {
-			env: Env;
-			ctx: ExecutionContext;
-			caches: CacheStorage;
-			cf?: IncomingRequestCfProperties;
-		}
+		// interface Platform {}: adapter-cloudflare 8 passes no `platform`;
+		// use `env` and `waitUntil` from 'cloudflare:workers' instead.
 	}
 }
 

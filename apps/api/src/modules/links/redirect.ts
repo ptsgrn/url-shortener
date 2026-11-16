@@ -33,7 +33,6 @@ export const redirect = (deps: Deps) =>
           // visitor isn't kept waiting, and a stats failure can't break it).
           inBackground(
             deps,
-            request,
             Stats.record(deps.db, link.id, request.headers),
           ).map(() => link),
         )
