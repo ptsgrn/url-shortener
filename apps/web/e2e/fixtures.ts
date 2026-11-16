@@ -1,23 +1,45 @@
-import { test as base, expect, request, type APIRequestContext } from '@playwright/test';
+import { test as base, expect, request, type Locator } from '@playwright/test';
 
 type Role = 'user' | 'admin';
 
 /**
- * Whitelists a domain pattern (e.g. `*.example.com`), signing in as a new
- * admin in a separate context. Links are blocked unless their host matches a
- * whitelist rule, and a fresh database has none.
+ * A request context signed in as a new account, apart from the page's. The
+ * caller disposes it.
+ */
+export async function accountContext(baseURL: string, role: Role = 'user', name?: string) {
+	const ctx = await request.newContext({ baseURL });
+	const res = await ctx.post('/api/dev/users', {
+		data: { role, name: name ?? `E2E ${role} ${crypto.randomUUID().slice(0, 8)}` }
+	});
+	expect(res.ok(), 'dev sign-in needs DEV_TOOLS=true in .dev.vars').toBeTruthy();
+	const user: { id: string; name: string } = await res.json();
+	return { ctx, user };
+}
+
+/**
+ * Whitelists a domain pattern (e.g. `*.example.com`) as a new admin. Links are
+ * blocked unless their host matches a whitelist rule, and a fresh database has none.
  */
 export async function allowDomain(baseURL: string, pattern: string) {
-	const admin: APIRequestContext = await request.newContext({ baseURL });
+	const { ctx } = await accountContext(baseURL, 'admin');
 	try {
-		const signIn = await admin.post('/api/dev/users', { data: { role: 'admin' } });
-		expect(signIn.ok(), 'dev sign-in needs DEV_TOOLS=true in .dev.vars').toBeTruthy();
-		const res = await admin.post('/api/v1/rules', { data: { list: 'whitelist', pattern } });
+		const res = await ctx.post('/api/v1/rules', { data: { list: 'whitelist', pattern } });
 		// 409: already whitelisted by an earlier run.
 		expect([201, 409]).toContain(res.status());
 	} finally {
-		await admin.dispose();
+		await ctx.dispose();
 	}
+}
+
+/**
+ * Waits for a dialog or sheet to finish animating in. bits-ui drops a click
+ * that lands while it is still opening, so click inside only after this.
+ */
+export async function settled(dialog: Locator) {
+	await expect(dialog).toBeVisible();
+	// The overlay animates too and sits outside the dialog, so wait on the whole page.
+	await dialog.page().evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+	return dialog;
 }
 
 export const test = base.extend<{

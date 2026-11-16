@@ -8,6 +8,8 @@ export default defineConfig({
 	// Not `*.test.ts`, which `bun test` would also pick up.
 	testMatch: '*.e2e.ts',
 	fullyParallel: true,
+	// The dev server compiles each route on first visit, so cold runs are slow.
+	timeout: 60_000,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 2 : 0,
 	reporter: process.env.CI ? 'github' : 'list',
