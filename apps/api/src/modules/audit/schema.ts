@@ -7,6 +7,8 @@ export type AuditAction =
   | "user.suspend"
   | "user.restore"
   | "link.update"
+  | "link.ban"
+  | "link.unban"
   | "rule.create"
   | "rule.update"
   | "rule.delete";

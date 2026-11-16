@@ -1,6 +1,6 @@
 import { t, type UnwrapSchema } from "elysia";
 import { errorBody } from "../../utils/error.ts";
-import { LinkModel } from "../links/model.ts";
+import { LinkError, LinkModel } from "../links/model.ts";
 import { UserError } from "../users/model.ts";
 
 export enum AdminError {
@@ -48,6 +48,8 @@ const auditAction = t.Union([
   t.Literal("user.suspend"),
   t.Literal("user.restore"),
   t.Literal("link.update"),
+  t.Literal("link.ban"),
+  t.Literal("link.unban"),
   t.Literal("rule.create"),
   t.Literal("rule.update"),
   t.Literal("rule.delete"),
@@ -88,6 +90,12 @@ export const AdminModel = {
     }),
     t.Undefined(),
   ]),
+  linkParams: t.Object({ code: t.String() }),
+  banBody: t.Object({
+    /** Shown to the owner on the link, and kept in the audit log. */
+    reason: t.String({ minLength: 1, maxLength: 500 }),
+  }),
+  linkNotFound: errorBody(LinkError.NotFound),
   linksQuery: t.Object({
     q: search("Matches the code or the destination URL."),
     ownerId: t.Optional(t.String()),

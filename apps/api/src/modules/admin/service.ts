@@ -6,6 +6,7 @@ import { dbQuery, type InternalError } from "../../utils/error.ts";
 import { Audit } from "../audit/service.ts";
 import { adminActions } from "../audit/schema.ts";
 import { refreshTokens } from "../auth/schema.ts";
+import { LinkError } from "../links/model.ts";
 import { links } from "../links/schema.ts";
 import { withStatus } from "../links/service.ts";
 import { UserError } from "../users/model.ts";
@@ -54,6 +55,22 @@ type OkOf<R> = R extends ResultAsync<infer T, unknown> ? T : never;
 const SCAN_CHUNK = 200;
 
 type Actor = { id: string };
+
+const withOwner = <
+  T extends {
+    ownerId: string | null;
+    ownerEmail: string | null;
+    ownerName: string | null;
+  },
+>({
+  ownerId,
+  ownerEmail,
+  ownerName,
+  ...link
+}: T) => ({
+  ...link,
+  owner: ownerId ? { id: ownerId, email: ownerEmail, name: ownerName } : null,
+});
 
 /** Admin oversight of accounts, all links and the audit log (FR-03, FR-15). */
 export abstract class Admin {
@@ -255,25 +272,7 @@ export abstract class Admin {
   ): ResultAsync<AdminModel["link"][], InternalError.Database> {
     const read = (from: number, size: number) =>
       dbQuery(() =>
-        db
-          .select({
-            id: links.id,
-            code: links.code,
-            url: links.url,
-            userId: links.userId,
-            createdAt: links.createdAt,
-            updatedAt: links.updatedAt,
-            deletedAt: links.deletedAt,
-            deactivatedAt: links.deactivatedAt,
-            deactivatedReason: links.deactivatedReason,
-            bannedAt: links.bannedAt,
-            bannedReason: links.bannedReason,
-            ownerId: users.id,
-            ownerEmail: users.email,
-            ownerName: users.name,
-          })
-          .from(links)
-          .leftJoin(users, eq(users.id, links.userId))
+        Admin.selectLinks(db)
           .where(
             and(
               deleted ? isNotNull(links.deletedAt) : isNull(links.deletedAt),
@@ -318,14 +317,151 @@ export abstract class Admin {
         ? scan(0, offset, [])
         : read(offset, limit);
 
-    return page.map((rows) =>
-      rows.map(({ ownerId, ownerEmail, ownerName, ...link }) => ({
-        ...link,
-        owner: ownerId
-          ? { id: ownerId, email: ownerEmail, name: ownerName }
-          : null,
-      })),
-    );
+    return page.map((rows) => rows.map(withOwner));
+  }
+
+  /** Links with their owner's id, email and name, for `where` and paging. */
+  private static selectLinks(db: DB) {
+    return db
+      .select({
+        id: links.id,
+        code: links.code,
+        url: links.url,
+        userId: links.userId,
+        createdAt: links.createdAt,
+        updatedAt: links.updatedAt,
+        deletedAt: links.deletedAt,
+        deactivatedAt: links.deactivatedAt,
+        deactivatedReason: links.deactivatedReason,
+        bannedAt: links.bannedAt,
+        bannedReason: links.bannedReason,
+        ownerId: users.id,
+        ownerEmail: users.email,
+        ownerName: users.name,
+      })
+      .from(links)
+      .leftJoin(users, eq(users.id, links.userId));
+  }
+
+  /** One link, not deleted, as admins see it. */
+  private static link(
+    db: DB,
+    code: string,
+  ): ResultAsync<
+    AdminModel["link"],
+    LinkError.NotFound | InternalError.Database
+  > {
+    return dbQuery(() =>
+      Admin.selectLinks(db)
+        .where(and(eq(links.code, code), isNull(links.deletedAt)))
+        .get(),
+    )
+      .andThen((row) => (row ? ok(row) : err(LinkError.NotFound)))
+      .andThen((row) => withStatus(db, [row]))
+      .map(([row]) => withOwner(row!));
+  }
+
+  /** The link's id, for checks before changing it. */
+  private static linkId(db: DB, code: string) {
+    return dbQuery(() =>
+      db.query.links.findFirst({
+        where: and(eq(links.code, code), isNull(links.deletedAt)),
+        columns: { id: true },
+      }),
+    ).andThen((link) => (link ? ok(link.id) : err(LinkError.NotFound)));
+  }
+
+  /**
+   * Bans link `code` (FR-13): it stops redirecting, and its owner can no
+   * longer change it, so they can't turn it back on; only an admin lifting
+   * the ban can. Its code and the owner's own on/off state are kept.
+   * Banning an already banned link changes and logs nothing.
+   */
+  static banLink(
+    db: DB,
+    actor: Actor,
+    code: string,
+    { reason }: AdminModel["banBody"],
+  ): ResultAsync<
+    AdminModel["link"],
+    LinkError.NotFound | InternalError.Database
+  > {
+    return Admin.linkId(db, code)
+      .andThen((id) =>
+        dbQuery(() =>
+          db.batch([
+            db
+              .update(links)
+              .set({
+                bannedAt: new Date(),
+                bannedReason: reason,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(links.id, id),
+                  isNull(links.deletedAt),
+                  isNull(links.bannedAt),
+                ),
+              ),
+            Audit.afterWrite(db, {
+              actorId: actor.id,
+              action: "link.ban",
+              targetType: "link",
+              targetId: id,
+              reason,
+              details: { code },
+            }),
+          ]),
+        ),
+      )
+      .andThen(() => Admin.link(db, code));
+  }
+
+  /**
+   * Lifts a link's ban. It redirects again only if its owner hadn't turned
+   * it off and it passes the domain rules. Unbanning a link that isn't
+   * banned changes and logs nothing.
+   */
+  static unbanLink(
+    db: DB,
+    actor: Actor,
+    code: string,
+    reason: string | undefined,
+  ): ResultAsync<
+    AdminModel["link"],
+    LinkError.NotFound | InternalError.Database
+  > {
+    return Admin.linkId(db, code)
+      .andThen((id) =>
+        dbQuery(() =>
+          db.batch([
+            db
+              .update(links)
+              .set({
+                bannedAt: null,
+                bannedReason: null,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(links.id, id),
+                  isNull(links.deletedAt),
+                  isNotNull(links.bannedAt),
+                ),
+              ),
+            Audit.afterWrite(db, {
+              actorId: actor.id,
+              action: "link.unban",
+              targetType: "link",
+              targetId: id,
+              reason,
+              details: { code },
+            }),
+          ]),
+        ),
+      )
+      .andThen(() => Admin.link(db, code));
   }
 
   /** The audit log, newest first. */

@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
-import { links } from "../src/modules/links/schema.ts";
 import { banLink, isRedirect, LinkErrors, linkApi, ok } from "./api.ts";
 import { createLink, useSuite } from "./fixtures.ts";
 
@@ -51,20 +49,21 @@ describe("FR-08: turning a link off and on", () => {
     expect(isRedirect((await api().visit(code)).status)).toBe(false);
   });
 
-  test.todo(
-    "FR-13: lifting a suspension doesn't re-enable a link the owner turned off",
-    async () => {
-      const { code } = await createLink(t.h, t.owner, "https://example.com");
-      await api().update(code, t.owner, { active: false });
-      await banLink(t.h, code);
-      // Admin lifts the suspension (FR-13), simulated directly.
-      await t.h.db
-        .update(links)
-        .set({ bannedAt: null, bannedReason: null })
-        .where(eq(links.code, code));
-      expect((await api().details(code, t.owner)).body.status).toBe("disabled");
-    },
-  );
+  test("FR-13: lifting a suspension doesn't re-enable a link the owner turned off", async () => {
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    await api().update(code, t.owner, { active: false });
+    await ok(
+      t.h.request("POST", `/v1/admin/links/${code}/ban`, {
+        as: t.admin,
+        body: { reason: "spam" },
+      }),
+    );
+    await ok(
+      t.h.request("DELETE", `/v1/admin/links/${code}/ban`, { as: t.admin }),
+    );
+    const [mine] = await ok(t.h.request("GET", "/v1/links", { as: t.owner }));
+    expect(mine.status).toBe("disabled");
+  });
 
   test("a deleted link can't be turned back on", async () => {
     const { code } = await createLink(t.h, t.owner, "https://example.com");

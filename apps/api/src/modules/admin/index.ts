@@ -7,6 +7,7 @@ import {
 } from "../../utils/error.ts";
 import { AuthModel } from "../auth/model.ts";
 import { authService } from "../auth/service.ts";
+import { LinkErrorStatus } from "../links/model.ts";
 import { UserErrorStatus } from "../users/model.ts";
 import { AdminErrorStatus, AdminModel } from "./model.ts";
 import { Admin } from "./service.ts";
@@ -14,6 +15,7 @@ import { Admin } from "./service.ts";
 const fail = failWith({
   ...AdminErrorStatus,
   ...UserErrorStatus,
+  ...LinkErrorStatus,
   ...InternalErrorStatus,
 });
 
@@ -139,6 +141,58 @@ export const admin = (deps: Deps) =>
         },
       },
     )
+    .post(
+      "/links/:code/ban",
+      ({ params, body, user, status }) =>
+        Admin.banLink(deps.db, user, params.code, body).match(
+          (link) => link,
+          fail(status),
+        ),
+      {
+        guardRole: "admin",
+        detail: {
+          summary: "Ban a link",
+          description: [
+            "The link stops redirecting (`LINK_BANNED`), and its owner can no longer change it, so they can't turn it back on or point it elsewhere (`LINK_BANNED` on `PATCH /links/:code`). Its code stays taken.",
+            "The reason is stored on the link, where its owner sees it, and in the audit log. Banning an already banned link changes nothing and returns it as is. A deleted link is 404.",
+          ].join("\n\n"),
+        },
+        params: AdminModel.linkParams,
+        body: AdminModel.banBody,
+        response: {
+          200: AdminModel.link,
+          404: AdminModel.linkNotFound,
+          401: AuthModel.unauthorized,
+          403: AuthModel.forbidden,
+          500: internalErrorBody,
+        },
+      },
+    )
+    .delete(
+      "/links/:code/ban",
+      ({ params, body, user, status }) =>
+        Admin.unbanLink(deps.db, user, params.code, body?.reason).match(
+          (link) => link,
+          fail(status),
+        ),
+      {
+        guardRole: "admin",
+        detail: {
+          summary: "Lift a link's ban",
+          description:
+            "The owner can manage the link again. It redirects again only if the owner hadn't turned it off, their account isn't suspended, and it passes the domain rules. Unbanning a link that isn't banned changes nothing.",
+        },
+        params: AdminModel.linkParams,
+        body: AdminModel.restoreBody,
+        response: {
+          200: AdminModel.link,
+          404: AdminModel.linkNotFound,
+          401: AuthModel.unauthorized,
+          403: AuthModel.forbidden,
+          500: internalErrorBody,
+        },
+      },
+    )
     .get(
       "/audit",
       ({ query, status }) =>
@@ -148,7 +202,7 @@ export const admin = (deps: Deps) =>
         detail: {
           summary: "The audit log of admin actions",
           description:
-            "Newest first: account suspensions and restores, admin changes to other users' links (including owner changes), and domain rule changes. Each entry has the admin, the time, the reason when one was given, and what changed.",
+            "Newest first: account suspensions and restores, link bans and unbans, admin changes to other users' links (including owner changes), and domain rule changes. Each entry has the admin, the time, the reason when one was given, and what changed.",
         },
         query: AdminModel.auditQuery,
         response: {

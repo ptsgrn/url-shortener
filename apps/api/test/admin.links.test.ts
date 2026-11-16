@@ -143,3 +143,100 @@ describe("FR-03: admins see any link's stats", () => {
     expect((await api().stats(code, t.admin)).status).toBe(404);
   });
 });
+
+describe("FR-13: admins ban and unban links", () => {
+  const ban = (code: string, reason = "phishing", who = t.admin) =>
+    t.h.request("POST", `/v1/admin/links/${code}/ban`, {
+      as: who,
+      body: { reason },
+    });
+  const unban = (code: string, who = t.admin) =>
+    t.h.request("DELETE", `/v1/admin/links/${code}/ban`, { as: who });
+  const linkAudit = () =>
+    t.h.db.query.adminActions.findMany({
+      where: (a, { eq }) => eq(a.targetType, "link"),
+    });
+
+  test("a ban stops the redirect and keeps the reason", async () => {
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    const body = await ok(ban(code));
+    expect(body).toMatchObject({
+      code,
+      status: "banned",
+      bannedReason: "phishing",
+      owner: { id: t.owner.id },
+    });
+    expect(body.bannedAt).not.toBeNull();
+    expect((await api().visit(code)).status).toBe(403);
+  });
+
+  test("the owner can't turn a banned link back on or change it", async () => {
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    await ok(ban(code));
+    const on = await api().update(code, t.owner, { active: true });
+    expect(on.status).toBe(403);
+    expect(on.body).toEqual({ error: "LINK_BANNED" });
+    const moved = await api().update(code, t.owner, {
+      url: "https://example.org",
+    });
+    expect(moved.status).toBe(403);
+    // Turning it off and on again doesn't get around the ban either.
+    expect((await api().update(code, t.owner, { active: false })).status).toBe(
+      403,
+    );
+    const [mine] = await ok(t.h.request("GET", "/v1/links", { as: t.owner }));
+    expect(mine.status).toBe("banned");
+  });
+
+  test("unbanning lets the owner manage it again and restores the redirect", async () => {
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    await ok(ban(code));
+    const body = await ok(unban(code));
+    expect(body).toMatchObject({
+      status: "active",
+      bannedAt: null,
+      bannedReason: null,
+    });
+    expect((await api().update(code, t.owner, { active: false })).status).toBe(
+      200,
+    );
+  });
+
+  test("ban and unban are idempotent and audited once each", async () => {
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    await ok(ban(code, "first"));
+    const again = await ok(ban(code, "second"));
+    expect(again.bannedReason).toBe("first");
+    await ok(unban(code));
+    await ok(unban(code));
+    const entries = await linkAudit();
+    expect(entries.map((e) => e.action).sort()).toEqual([
+      "link.ban",
+      "link.unban",
+    ]);
+    expect(entries.find((e) => e.action === "link.ban")).toMatchObject({
+      actorId: t.admin.id,
+      reason: "first",
+      details: { code },
+    });
+  });
+
+  test("a deleted or unknown link is 404", async () => {
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    await t.h.request("DELETE", `/v1/links/${code}`, { as: t.owner });
+    expect((await ban(code)).status).toBe(404);
+    expect((await ban("nope-nope")).status).toBe(404);
+    expect((await unban("nope-nope")).status).toBe(404);
+  });
+
+  test("admins only, and a reason is required", async () => {
+    const { code } = await createLink(t.h, t.owner, "https://example.com");
+    expect((await ban(code, "mine", t.owner)).status).toBe(403);
+    expect((await unban(code, t.owner)).status).toBe(403);
+    const noReason = await t.h.request("POST", `/v1/admin/links/${code}/ban`, {
+      as: t.admin,
+      body: {},
+    });
+    expect(noReason.status).toBe(422);
+  });
+});
