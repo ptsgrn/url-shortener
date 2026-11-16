@@ -1,7 +1,6 @@
-import { dev } from '$app/env';
-import { error } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
 
-// A preview with sample data until `/me` reports bans; then the app sends banned users here.
-export const load = () => {
-	if (!dev) error(404);
+export const load: PageServerLoad = ({ locals }) => {
+	if (!locals.user?.suspended) redirect(303, '/');
 };

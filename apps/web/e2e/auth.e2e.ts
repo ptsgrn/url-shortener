@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures.ts';
+import { expect, settled, test } from './fixtures.ts';
 
 test('signed-out visitors are sent to login', async ({ page }) => {
 	await page.goto('/');
@@ -28,7 +28,7 @@ test('signed-in users skip login and can sign out from the menu', async ({ page,
 	await expect(page).toHaveURL('/');
 
 	await page.getByRole('button', { name: 'Menu' }).click();
-	await expect(page.getByRole('dialog').getByText(user.name)).toBeVisible();
+	await expect((await settled(page.getByRole('dialog'))).getByText(user.name)).toBeVisible();
 	await page.getByRole('button', { name: 'ออกจากระบบ' }).click();
 
 	await expect(page).toHaveURL('/login');

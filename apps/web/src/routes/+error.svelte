@@ -14,8 +14,12 @@
 	<img src={notFound} alt="" width="223" height="223" class="mx-auto -scale-x-100" />
 	<h1 class="mt-5 text-center text-4xl leading-tight font-medium">
 		{page.status}<br />Oops...<br />
-		{page.status === 404 ? 'Page not found' : page.error?.message}
+		{page.status === 404 ? 'Page not found' : 'Something went wrong'}
 	</h1>
+	<!-- SvelteKit's own messages ("Not Found") are English; ours are the Thai ones. -->
+	{#if page.error?.message && !/^[A-Za-z ]+$/.test(page.error.message)}
+		<p class="mt-4 text-center text-lg">{page.error.message}</p>
+	{/if}
 {:else}
 	<!-- The artwork is cropped from a larger illustration that has "502 Bad Gateway" baked in. -->
 	<div class="relative -mt-4 h-75 overflow-hidden">

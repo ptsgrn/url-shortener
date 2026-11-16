@@ -6,4 +6,5 @@
 	<title>คุณโดนแบน · MicroL</title>
 </svelte:head>
 
-<BannedNotice reason="ทำผิดนโยบายที่ 67" until={new Date(Date.now() + 7 * 24 * 3600 * 1000)} />
+<!-- `/me` doesn't say why or until when, so the notice shows neither. -->
+<BannedNotice />

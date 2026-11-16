@@ -1,34 +1,73 @@
 <script lang="ts">
 	import clipboard from '#lib/assets/clipboard.svg';
+	import type { AdminLink, Link } from '#lib/api.ts';
 	import { copy, displayUrl, shortUrl, timeAgo } from '#lib/links.ts';
 
 	let {
-		code,
-		url,
-		createdAt,
-		onqr
-	}: { code: string; url: string; createdAt: Date; onqr: () => void } = $props();
+		link,
+		admin = false,
+		onedit,
+		ontoggle,
+		ondelete,
+		onstats,
+		onqr,
+		onban
+	}: {
+		link: Link | AdminLink;
+		/** Admin view: shows the owner and ban actions, hides delete (owners only). */
+		admin?: boolean;
+		onedit: () => void;
+		ontoggle: () => void;
+		ondelete: () => void;
+		onstats: () => void;
+		onqr: () => void;
+		onban?: () => void;
+	} = $props();
 
-	const short = $derived(shortUrl(code));
-	// Edit, deactivate, delete and stats need API endpoints that don't exist yet.
-	const pending = ['แก้ไข', 'ปิดใช้งาน', 'ลบ', 'สถิติการเข้าชม'];
+	const short = $derived(shortUrl(link.code));
+	const owner = $derived(
+		'owner' in link ? (link.owner as { name?: string | null; email?: string | null } | null) : null
+	);
+
+	const statusText = $derived(
+		{
+			active: null,
+			disabled: 'ปิดใช้งาน',
+			banned: `ถูกระงับ${link.bannedReason ? `: ${link.bannedReason}` : ''}`,
+			blocked: 'โดเมนไม่ได้รับอนุญาต'
+		}[link.status]
+	);
 </script>
 
 <article class="flex flex-col gap-1 rounded-md bg-muted px-3.25 pt-2 pb-2.5 text-[11px]">
 	<div class="flex items-center gap-6">
-		<span>{displayUrl(short)}</span>
+		<span class:line-through={link.status !== 'active'}>{displayUrl(short)}</span>
 		<button type="button" aria-label="คัดลอกลิงก์" onclick={() => copy(short)}>
 			<img src={clipboard} alt="" width="12.25" height="12.25" />
 		</button>
+		{#if statusText}
+			<span class="ml-auto rounded-sm bg-foreground/10 px-1.5 text-[10px]">{statusText}</span>
+		{/if}
 	</div>
-	<p class="truncate">{url}</p>
-	<div class="flex flex-wrap items-center gap-x-4.5 pt-3 text-xs text-brand">
-		{#each pending as label (label)}
-			<button type="button" disabled title="ยังไม่พร้อมใช้งาน" class="disabled:opacity-50"
-				>{label}</button
-			>
-		{/each}
+	<p class="truncate">{link.url}</p>
+	{#if admin && owner}
+		<p class="truncate text-muted-foreground">โดย {owner.name ?? owner.email ?? 'ไม่ทราบ'}</p>
+	{/if}
+	<div class="flex flex-wrap items-center gap-x-4.5 gap-y-1 pt-3 text-xs text-brand">
+		<button type="button" onclick={onedit}>แก้ไข</button>
+		{#if link.status !== 'banned'}
+			<button type="button" onclick={ontoggle}>
+				{link.deactivatedAt ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
+			</button>
+		{/if}
+		{#if !admin}
+			<button type="button" onclick={ondelete}>ลบ</button>
+		{/if}
+		<button type="button" onclick={onstats}>สถิติการเข้าชม</button>
 		<button type="button" onclick={onqr}>qrcode</button>
-		<span>{timeAgo(createdAt)}</span>
+		{#if admin && onban}
+			<button type="button" onclick={onban}>{link.bannedAt ? 'ยกเลิกระงับ' : 'ระงับ'}</button>
+		{/if}
+		<span>{timeAgo(new Date(link.createdAt))}</span>
 	</div>
 </article>

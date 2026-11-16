@@ -2,27 +2,61 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import filter from '#lib/assets/filter.png';
-	import LinkCard from '#lib/components/LinkCard.svelte';
-	import LinkQrDialog from '#lib/components/LinkQrDialog.svelte';
+	import { api, type AdminLink } from '#lib/api.ts';
+	import LinkList from '#lib/components/LinkList.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { shortUrl } from '#lib/links.ts';
-	import { links, users } from '../sample.ts';
+	import { errorMessage } from '#lib/errors.ts';
+	import { PAGE_SIZE } from '#lib/links.ts';
+	import { toast } from 'svelte-sonner';
+	import type { PageProps } from './$types';
 
-	const userId = $derived(page.url.searchParams.get('user'));
-	const owner = $derived(users.find((u) => u.id === userId));
+	let { data }: PageProps = $props();
 
 	let showFilter = $state(false);
-	let query = $state('');
-	let qr = $state<string | null>(null);
-	let qrOpen = $state(false);
+	let links = $state<AdminLink[]>([]);
+	let hasMore = $state(false);
+	let loadingMore = $state(false);
+	$effect(() => {
+		links = data.links;
+		hasMore = data.links.length === PAGE_SIZE;
+		if (data.filters.q || data.filters.status) showFilter = true;
+	});
 
-	const shown = $derived(
-		links.filter(
-			(l) =>
-				(!userId || l.userId === userId) &&
-				(!query || `${l.code} ${l.url}`.toLowerCase().includes(query.toLowerCase()))
-		)
-	);
+	const statuses = [
+		['', 'ทุกสถานะ'],
+		['active', 'ใช้งานอยู่'],
+		['disabled', 'ปิดใช้งาน'],
+		['banned', 'ถูกระงับ'],
+		['blocked', 'โดเมนไม่ได้รับอนุญาต']
+	] as const;
+
+	/** The current URL without one search param, for clearing a filter. */
+	function without(name: string) {
+		const url = new URL(page.url.href);
+		url.searchParams.delete(name);
+		return `${url.pathname}${url.search}`;
+	}
+
+	async function loadMore() {
+		loadingMore = true;
+		const { q, status, ownerId } = data.filters;
+		const res = await api.v1.admin.links.get({
+			query: {
+				q: q || undefined,
+				status: status ?? undefined,
+				ownerId,
+				offset: links.length,
+				limit: PAGE_SIZE
+			}
+		});
+		loadingMore = false;
+		if (res.error) {
+			toast.error(errorMessage(res.error));
+			return;
+		}
+		links = [...links, ...res.data];
+		hasMore = res.data.length === PAGE_SIZE;
+	}
 </script>
 
 <svelte:head>
@@ -35,37 +69,52 @@
 </div>
 
 <div class="mt-2 flex items-center gap-2 pl-4">
-	<button type="button" aria-label="กรองลิงก์" onclick={() => (showFilter = !showFilter)}>
+	<button
+		type="button"
+		aria-label="กรองลิงก์"
+		aria-expanded={showFilter}
+		onclick={() => (showFilter = !showFilter)}
+	>
 		<img src={filter} alt="" width="20" height="20" />
 	</button>
-	{#if owner}
-		<a href={resolve('/admin/links')} class="rounded-md bg-muted px-2 text-sm">{owner.name} ✕</a>
+	{#if data.owner}
+		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, fewer params -->
+		<a href={without('owner')} class="rounded-md bg-muted px-2 text-sm">
+			ของ {data.owner.name ?? data.owner.email} ✕
+		</a>
 	{/if}
 </div>
+
 {#if showFilter}
-	<!-- svelte-ignore a11y_autofocus -->
-	<input
-		bind:value={query}
-		autofocus
-		placeholder="ค้นหาจากโค้ดหรือ URL"
-		class="mx-3.5 mt-2 h-8 rounded-md border border-input bg-card px-3 text-sm"
-	/>
-{/if}
-
-<div class="mt-2 flex flex-col gap-2 px-3.5">
-	{#each shown as link (link.code)}
-		<LinkCard
-			{...link}
-			onqr={() => {
-				qr = link.code;
-				qrOpen = true;
-			}}
+	<form method="GET" class="mx-3.5 mt-2 flex flex-wrap gap-2" data-sveltekit-keepfocus>
+		{#if data.filters.ownerId}<input type="hidden" name="owner" value={data.filters.ownerId} />{/if}
+		<input
+			name="q"
+			value={data.filters.q}
+			placeholder="ค้นหาจากโค้ดหรือ URL"
+			class="h-8 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm"
 		/>
-	{:else}
-		<p class="py-8 text-center text-muted-foreground">ไม่พบลิงก์</p>
-	{/each}
-</div>
-
-{#if qr}
-	<LinkQrDialog bind:open={qrOpen} title="QR Code" url={shortUrl(qr)} code={qr} />
+		<select
+			name="status"
+			value={data.filters.status ?? ''}
+			class="h-8 rounded-md border border-input bg-card px-2 text-sm"
+		>
+			{#each statuses as [value, label] (value)}
+				<option {value}>{label}</option>
+			{/each}
+		</select>
+		<Button type="submit" size="sm">ค้นหา</Button>
+	</form>
 {/if}
+
+<div class="mt-3 flex flex-col gap-3 px-3.5">
+	<LinkList bind:links admin empty="ไม่พบลิงก์" />
+	{#if hasMore}
+		<button
+			type="button"
+			class="self-center text-sm text-brand"
+			disabled={loadingMore}
+			onclick={loadMore}>ดูเพิ่มเติม</button
+		>
+	{/if}
+</div>
